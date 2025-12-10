@@ -1,43 +1,88 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import * as XLSX from 'xlsx-js-style'; 
+import { Document, Packer, Paragraph, Table, TableCell, TableRow, WidthType, BorderStyle, AlignmentType, HeadingLevel } from "docx";
+import { saveAs } from "file-saver";
+
 import { 
-  Search, FileEdit, ChevronLeft, ChevronDown,
-  Plus, ArrowRight, X, Download, Save, Eye, Trash2, CheckCircle, Check
+  FileEdit, ChevronLeft, Plus, ArrowRight, X, Download, Save, Eye, Trash2, Search, Filter, FileText, PlusCircle
 } from 'lucide-react';
-// Import Data Dummy
-import { projectsData, masterPanels, formatRupiah } from '../../data/mockData';
+
+import { projectsData, masterPanels, formatRupiah, formatUSD } from '../../data/mockData';
+
+// --- COMPONENT: TRANSFORMING HEADER FILTER ---
+const ColumnFilter = ({ label, field, currentFilter, onFilterChange, bgColor = "bg-slate-800", textColor="text-white", width="min-w-[100px]", className="", stickyStyle={} }) => {
+  const [isSearchMode, setIsSearchMode] = useState(false);
+  const inputRef = useRef(null);
+  
+  useEffect(() => { if (isSearchMode && inputRef.current) inputRef.current.focus(); }, [isSearchMode]);
+  const toggleSearch = () => setIsSearchMode(true);
+  const closeSearch = (e) => { e.stopPropagation(); setIsSearchMode(false); };
+
+  return (
+    <th 
+      className={`p-2 border-r border-slate-600 ${bgColor} ${textColor} ${width} align-middle transition-all h-[45px] ${className}`}
+      style={stickyStyle} 
+    >
+      {!isSearchMode ? (
+        <div className="flex items-center justify-between group cursor-pointer gap-1" onClick={toggleSearch}>
+          <div className="flex items-center gap-1 overflow-hidden">
+            <span className="text-xs font-bold uppercase tracking-wider truncate select-none">{label}</span>
+            {currentFilter && <div className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse flex-shrink-0"></div>}
+          </div>
+          <button onClick={(e) => { e.stopPropagation(); toggleSearch(); }} className={`p-1 rounded hover:bg-white/20 flex-shrink-0 ${currentFilter ? 'text-yellow-300' : 'text-white/50 hover:text-white'}`}>
+            <Filter size={12} strokeWidth={2.5}/>
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-1 w-full animate-in fade-in">
+          <input 
+            ref={inputRef} type="text" placeholder="Cari..." 
+            className="w-full px-1.5 py-1 text-[10px] rounded border-none text-slate-900 focus:ring-1 focus:ring-blue-400 focus:outline-none shadow-inner" 
+            value={currentFilter || ''} onChange={(e) => onFilterChange(field, e.target.value)}
+          />
+          <button onClick={closeSearch} className="text-white/70 hover:text-red-400 p-0.5"><X size={14} /></button>
+        </div>
+      )}
+    </th>
+  );
+};
 
 const ProjectDetail = () => {
   const navigate = useNavigate();
-  
-  // Ambil Data Project (Header)
   const projectInfo = projectsData[0]; 
 
-  // --- STATE MANAGEMENT ---
-  const [panels, setPanels] = useState(projectInfo.details); // Data Panel di Tabel
-  const [rowLevels, setRowLevels] = useState({}); // Status Buka/Tutup Detail (0=Tutup, 1-4=Level)
-  const [isModalOpen, setIsModalOpen] = useState(false); // Status Modal Tambah Panel
-
-  // State untuk Dropdown Pencarian di Modal
-  const [searchTerm, setSearchTerm] = useState("");
+  const [panels, setPanels] = useState(projectInfo.details); 
+  const [rowLevels, setRowLevels] = useState({}); 
+  const [isModalOpen, setIsModalOpen] = useState(false); 
+  
+  // State Modal & Form
+  const [modalSearchTerm, setModalSearchTerm] = useState("");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
-
-  // State Form Tambah Panel
+  
   const [newPanelForm, setNewPanelForm] = useState({
     idMaster: '', 
-    jenis: '',
-    jumlah: 1,
-    hargaSatuan: 0,
-    defaultMaterials: []
+    jenis: '',    
+    jumlah: 1, 
+    hargaSatuan: 0, 
+    defaultMaterials: [],
+    isCustom: false
   });
 
-  // Filter Master Panel berdasarkan ketikan user
+  const [colFilters, setColFilters] = useState({
+    description: '', brand: '', qty: '', unit: ''
+  });
+
+  const handleColFilterChange = (field, value) => {
+    setColFilters(prev => ({ ...prev, [field]: value }));
+  };
+
+  // Logic Filter Master Panel (Search)
   const filteredMasterPanels = masterPanels.filter(panel => 
-    panel.name.toLowerCase().includes(searchTerm.toLowerCase())
+    panel.name.toLowerCase().includes(modalSearchTerm.toLowerCase())
   );
 
-  // Efek untuk menutup dropdown jika klik di luar
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -48,192 +93,319 @@ const ProjectDetail = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // --- LOGIC: EXPAND / COLLAPSE DETAIL ---
+  const getMaterialPrice = (mat) => mat.currency === 'USD' ? mat.internationalPrice : mat.localPrice;
+  const calculateTotalMaterial = (mat) => {
+    const unitPrice = getMaterialPrice(mat);
+    const grossTotal = unitPrice * mat.qty * mat.factor;
+    const discountAmount = grossTotal * (mat.diskon / 100);
+    return grossTotal - discountAmount;
+  };
+  const renderPrice = (price, currency) => currency === 'USD' ? formatUSD(price) : formatRupiah(price);
+
+  const HighlightText = ({ text, highlight }) => {
+    if (!highlight || !text) return text;
+    const parts = text.toString().split(new RegExp(`(${highlight})`, 'gi'));
+    return <span>{parts.map((part, i) => part.toLowerCase() === highlight.toLowerCase() ? <span key={i} className="bg-yellow-300 text-black font-bold px-0.5 rounded">{part}</span> : part)}</span>;
+  };
+
+  // --- LOGIC: EXPORT EXCEL (FULL DENGAN WARNA) ---
+  const handleExportExcel = () => {
+    const sheetData = [];
+    // 1. Info Project
+    sheetData.push(["PROJECT SUMMARY"]);
+    sheetData.push(["Job No", projectInfo.jobNo]);
+    sheetData.push(["Project Name", projectInfo.namaProject]);
+    sheetData.push(["Customer", projectInfo.customer]);
+    sheetData.push([]); 
+
+    // 2. Header Tabel
+    sheetData.push([
+      "Description", "Type", "Brand", "Spec Detail", "Qty (Mat)", "Unit", 
+      "Price (IDR)", "Price (USD)", "Factor", "Disc (%)",
+      "Hargakomponen stl Faktor", "", "Man Hour", "Harga Komponen", "" 
+    ]);
+    sheetData.push([
+      "", "", "", "", "", "", "", "", "", "", "USD", "IDR", "IDR", "Satuan (IDR)", "Total (IDR)" 
+    ]);
+
+    // 3. Isi Data
+    panels.forEach(panel => {
+      sheetData.push([panel.jenis.toUpperCase(), "", "", "", "", "", "", "", "", "", "", "", "", "", ""]);
+      if(panel.materials) {
+        panel.materials.forEach(mat => {
+          const isUSD = mat.currency === 'USD';
+          const basePrice = isUSD ? mat.internationalPrice : mat.localPrice;
+          const priceAfterFactor = basePrice * mat.factor;
+          const priceAfterDiscUnit = priceAfterFactor * (1 - (mat.diskon / 100)); 
+          const priceTotalFinal = priceAfterDiscUnit * mat.qty; 
+
+          sheetData.push([
+            mat.item, mat.series || "-", mat.brand, mat.detail, mat.qty, mat.unit,                 
+            !isUSD ? basePrice : 0, isUSD ? basePrice : 0, mat.factor, mat.diskon,               
+            isUSD ? priceAfterFactor : 0, !isUSD ? priceAfterFactor : 0, 
+            mat.manHour || 0, priceAfterDiscUnit, priceTotalFinal           
+          ]);
+        });
+      }
+    });
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(sheetData);
+    
+    // 4. Styling
+    const borderStyle = { top: { style: "thin", color: { rgb: "000000" } }, bottom: { style: "thin", color: { rgb: "000000" } }, left: { style: "thin", color: { rgb: "000000" } }, right: { style: "thin", color: { rgb: "000000" } } };
+    const headerStyle = { font: { bold: true, color: { rgb: "000000" } }, fill: { fgColor: { rgb: "D9D9D9" } }, alignment: { horizontal: "center", vertical: "center" }, border: borderStyle };
+    const panelTitleStyle = { font: { bold: true }, fill: { fgColor: { rgb: "EBF1DE" } }, border: borderStyle };
+    const cellStyle = { border: borderStyle, alignment: { vertical: "center" } };
+
+    // Apply Styles Loop
+    Object.keys(ws).forEach(cellKey => {
+      if (cellKey.indexOf('!') === 0) return;
+      const r = XLSX.utils.decode_cell(cellKey).r;
+      const c = XLSX.utils.decode_cell(cellKey).c;
+
+      if (r >= 5) {
+        if(r === 5 || r === 6) {
+           ws[cellKey].s = headerStyle;
+        } else {
+           // Cek apakah ini judul panel (Kolom A ada isi, B kosong)
+           const isTitle = ws[XLSX.utils.encode_cell({r:r, c:0})]?.v && !ws[XLSX.utils.encode_cell({r:r, c:1})]?.v;
+           if (isTitle) {
+             ws[cellKey].s = panelTitleStyle;
+           } else {
+             ws[cellKey].s = cellStyle;
+           }
+        }
+      }
+    });
+    
+    // 5. Merge & Width
+    ws['!merges'] = [{ s: { r: 5, c: 10 }, e: { r: 5, c: 11 } }, { s: { r: 5, c: 13 }, e: { r: 5, c: 14 } }];
+    ws['!cols'] = [{ wch: 25 }, { wch: 10 }, { wch: 15 }, { wch: 30 }, { wch: 8 }, { wch: 8 }, { wch: 15 }, { wch: 10 }, { wch: 8 }, { wch: 8 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 20 }];
+
+    XLSX.utils.book_append_sheet(wb, ws, "Detail Estimasi");
+    XLSX.writeFile(wb, `${projectInfo.jobNo}_Detail_Estimasi.xlsx`);
+  };
+
+  // --- LOGIC: EXPORT WORD (FULL) ---
+  const handleExportWord = () => {
+    const tableRows = [];
+
+    // Header
+    tableRows.push(
+      new TableRow({
+        children: [
+          new TableCell({ children: [new Paragraph({ text: "Description", bold: true })], width: { size: 35, type: WidthType.PERCENTAGE } }),
+          new TableCell({ children: [new Paragraph({ text: "Brand", bold: true })], width: { size: 15, type: WidthType.PERCENTAGE } }),
+          new TableCell({ children: [new Paragraph({ text: "Qty", bold: true, alignment: AlignmentType.CENTER })], width: { size: 10, type: WidthType.PERCENTAGE } }),
+          new TableCell({ children: [new Paragraph({ text: "Unit", bold: true, alignment: AlignmentType.CENTER })], width: { size: 10, type: WidthType.PERCENTAGE } }),
+          new TableCell({ children: [new Paragraph({ text: "Price (Est)", bold: true, alignment: AlignmentType.RIGHT })], width: { size: 15, type: WidthType.PERCENTAGE } }),
+          new TableCell({ children: [new Paragraph({ text: "Total", bold: true, alignment: AlignmentType.RIGHT })], width: { size: 15, type: WidthType.PERCENTAGE } }),
+        ],
+        tableHeader: true,
+      })
+    );
+
+    // Data Loop
+    panels.forEach(panel => {
+      tableRows.push(
+        new TableRow({
+          children: [
+            new TableCell({ 
+              children: [new Paragraph({ text: panel.jenis.toUpperCase(), bold: true, color: "2E74B5" })],
+              columnSpan: 6,
+              shading: { fill: "F2F2F2" }
+            })
+          ]
+        })
+      );
+
+      if(panel.materials) {
+        panel.materials.forEach(mat => {
+          const unitPrice = getMaterialPrice(mat);
+          const total = calculateTotalMaterial(mat);
+          tableRows.push(
+            new TableRow({
+              children: [
+                new TableCell({ children: [new Paragraph(mat.detail || mat.item)] }),
+                new TableCell({ children: [new Paragraph(mat.brand)] }),
+                new TableCell({ children: [new Paragraph({ text: mat.qty.toString(), alignment: AlignmentType.CENTER })] }),
+                new TableCell({ children: [new Paragraph({ text: mat.unit, alignment: AlignmentType.CENTER })] }),
+                new TableCell({ children: [new Paragraph({ text: formatRupiah(unitPrice), alignment: AlignmentType.RIGHT })] }),
+                new TableCell({ children: [new Paragraph({ text: formatRupiah(total), alignment: AlignmentType.RIGHT })] }),
+              ]
+            })
+          );
+        });
+      }
+    });
+
+    const doc = new Document({
+      sections: [{
+        properties: {},
+        children: [
+          new Paragraph({ text: `PROJECT SUMMARY: ${projectInfo.namaProject}`, heading: HeadingLevel.HEADING_1 }),
+          new Paragraph({ text: `Job No: ${projectInfo.jobNo}` }),
+          new Paragraph({ text: `Customer: ${projectInfo.customer}` }),
+          new Paragraph({ text: "" }),
+          new Table({
+            rows: tableRows,
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            borders: {
+              top: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
+              bottom: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
+              left: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
+              right: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
+              insideHorizontal: { style: BorderStyle.SINGLE, size: 1, color: "DDDDDD" },
+              insideVertical: { style: BorderStyle.SINGLE, size: 1, color: "DDDDDD" },
+            }
+          })
+        ]
+      }]
+    });
+
+    Packer.toBlob(doc).then(blob => {
+      saveAs(blob, `${projectInfo.jobNo}_Project_Detail.docx`);
+    });
+  };
+
+  // --- UI ACTIONS ---
   const changeLevel = (id, action) => {
     setRowLevels((prev) => {
       const current = prev[id] || 0;
-      // NEXT: Tambah level (0 -> 1 -> 2 -> 3 -> 4)
       if (action === 'NEXT') return { ...prev, [id]: current >= 4 ? 4 : current + 1 };
-      // CLOSE: Reset ke 0
       if (action === 'CLOSE') return { ...prev, [id]: 0 };
       return prev;
     });
   };
 
-  // --- LOGIC: PILIH PANEL DARI DROPDOWN ---
+  // Select Existing Panel
   const handleSelectPanel = (panel) => {
-    setNewPanelForm({
-      ...newPanelForm,
-      idMaster: panel.id,
-      jenis: panel.name,
-      hargaSatuan: panel.price,
-      defaultMaterials: panel.defaultMaterials || []
+    setNewPanelForm({ 
+      idMaster: panel.id, 
+      jenis: panel.name, 
+      jumlah: 1, 
+      hargaSatuan: panel.price, 
+      defaultMaterials: panel.defaultMaterials || [],
+      isCustom: false
     });
-    setSearchTerm(panel.name); // Isi input dengan nama yg dipilih
-    setIsDropdownOpen(false); // Tutup dropdown
-  };
-
-  // --- LOGIC: BUKA MODAL ---
-  const openModal = () => {
-    setNewPanelForm({ idMaster: '', jenis: '', jumlah: 1, hargaSatuan: 0, defaultMaterials: [] });
-    setSearchTerm("");
+    setModalSearchTerm(panel.name); 
     setIsDropdownOpen(false);
-    setIsModalOpen(true);
   };
 
-  // --- LOGIC: SIMPAN PANEL BARU ---
-  const handleAddPanel = (e) => {
-    e.preventDefault();
-    if (!newPanelForm.jenis) return alert("Silakan pilih jenis panel dari daftar!");
+  // Create Custom Panel (New)
+  const handleCreateCustomPanel = () => {
+    setNewPanelForm({
+      idMaster: `custom-${Date.now()}`,
+      jenis: modalSearchTerm,
+      jumlah: 1,
+      hargaSatuan: 0,
+      defaultMaterials: [],
+      isCustom: true
+    });
+    setIsDropdownOpen(false);
+  };
 
-    const newPanelData = {
-      id: Date.now(), // ID Unik
-      jenis: newPanelForm.jenis,
-      jumlah: parseInt(newPanelForm.jumlah),
-      hargaSatuan: parseInt(newPanelForm.hargaSatuan),
-      hargaAkhir: parseInt(newPanelForm.jumlah) * parseInt(newPanelForm.hargaSatuan),
-      // Masukkan material bawaan (jika ada)
-      materials: newPanelForm.defaultMaterials.map((mat, index) => ({
-        ...mat,
-        id: `new-mat-${Date.now()}-${index}`
-      }))
-    };
+  const openModal = () => { 
+    setNewPanelForm({ idMaster: '', jenis: '', jumlah: 1, hargaSatuan: 0, defaultMaterials: [], isCustom: false }); 
+    setModalSearchTerm(""); 
+    setIsDropdownOpen(false); 
+    setIsModalOpen(true); 
+  };
 
-    setPanels([...panels, newPanelData]); 
+  const handleAddPanel = (e) => { 
+    e.preventDefault(); 
+    if (!newPanelForm.jenis) return alert("Nama panel tidak boleh kosong!"); 
+    
+    setPanels([...panels, { 
+      id: Date.now(), 
+      jenis: newPanelForm.jenis, 
+      jumlah: parseInt(newPanelForm.jumlah), 
+      hargaSatuan: parseInt(newPanelForm.hargaSatuan), 
+      hargaAkhir: parseInt(newPanelForm.jumlah) * parseInt(newPanelForm.hargaSatuan), 
+      materials: newPanelForm.defaultMaterials.map((mat, i) => ({ ...mat, id: `new-mat-${Date.now()}-${i}` })) 
+    }]); 
     setIsModalOpen(false); 
   };
 
-  // --- LOGIC: HAPUS PANEL ---
-  const handleDeletePanel = (id) => {
-    if (confirm("Yakin ingin menghapus panel ini beserta seluruh isinya?")) {
-      setPanels(panels.filter(p => p.id !== id));
-    }
-  };
+  const handleDeletePanel = (id) => { if (confirm("Hapus panel?")) setPanels(panels.filter(p => p.id !== id)); };
 
   return (
-    <div className="flex-1 h-screen flex flex-col overflow-hidden font-sans transition-colors duration-300
-      bg-slate-50/50 dark:bg-slate-950">
+    <div className="flex-1 h-screen flex flex-col overflow-hidden font-sans transition-colors duration-300 bg-slate-50/50 dark:bg-slate-950">
       
-      {/* === HEADER BAR === */}
-      <div className="px-8 py-4 flex justify-between items-center shadow-sm z-30 sticky top-0 transition-colors
-        bg-white border-b border-slate-200 dark:bg-slate-900 dark:border-slate-800">
-        
+      {/* HEADER */}
+      <div className="px-8 py-4 flex justify-between items-center shadow-sm z-30 sticky top-0 bg-white border-b border-slate-200 dark:bg-slate-900 dark:border-slate-800">
         <div className="flex items-center gap-4">
-           <button onClick={() => navigate('/')} className="flex items-center gap-2 font-medium transition-colors
-             text-slate-500 hover:text-blue-700 dark:text-slate-400 dark:hover:text-blue-400">
-             <div className="p-1.5 rounded-md border transition-colors border-slate-200 hover:bg-blue-50 hover:border-blue-200
-               dark:border-slate-700 dark:hover:bg-slate-800 dark:hover:border-blue-500">
-               <ChevronLeft size={18} />
-             </div>
+           <button onClick={() => navigate('/')} className="flex items-center gap-2 font-medium text-slate-500 hover:text-blue-700 dark:text-slate-400 dark:hover:text-blue-400">
+             <div className="p-1.5 rounded-md border border-slate-200 hover:bg-blue-50 dark:border-slate-700 dark:hover:bg-slate-800"><ChevronLeft size={18} /></div>
              <span className="text-sm">Back</span>
            </button>
            <div className="h-8 w-px bg-slate-200 dark:bg-slate-700 mx-2"></div>
            <div>
-             <h1 className="text-xl font-bold flex items-center gap-3 text-slate-800 dark:text-white">
-               {projectInfo.namaProject} 
-               <span className="px-2.5 py-0.5 text-sm rounded-md font-mono border bg-blue-50 text-blue-700 border-blue-100
-                 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800">{projectInfo.jobNo}</span>
-             </h1>
+             <h1 className="text-xl font-bold flex items-center gap-3 text-slate-800 dark:text-white">{projectInfo.namaProject} <span className="px-2.5 py-0.5 text-sm rounded-md font-mono border bg-blue-50 text-blue-700 border-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800">{projectInfo.jobNo}</span></h1>
+             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Customer: {projectInfo.customer} • By: {projectInfo.pembuat}</p>
            </div>
         </div>
-        <div className="flex gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition shadow-sm border
-            text-slate-600 bg-white border-slate-300 hover:bg-slate-50
-            dark:text-slate-300 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700">
-             <Download size={16} strokeWidth={2.5}/> Export
-          </button>
-          <button className="bg-blue-700 hover:bg-blue-800 text-white px-6 py-2 rounded-lg text-sm font-semibold shadow-md shadow-blue-700/20 transition flex items-center gap-2 active:scale-95">
-             <Save size={18} /> Save Changes
-          </button>
+        <div className="flex gap-2">
+          <button onClick={handleExportExcel} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold border text-green-700 bg-green-50 border-green-200 hover:bg-green-100"><Download size={16}/> Excel</button>
+          <button onClick={handleExportWord} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold border text-blue-700 bg-blue-50 border-blue-200 hover:bg-blue-100"><FileText size={16}/> Word</button>
+          <div className="w-px bg-slate-300 mx-2"></div>
+          <button className="bg-blue-700 hover:bg-blue-800 text-white px-6 py-2 rounded-lg text-sm font-semibold shadow-md active:scale-95 transition flex gap-2 items-center"><Save size={18} /> Save Changes</button>
         </div>
       </div>
 
-      {/* === CONTENT AREA === */}
+      {/* CONTENT */}
       <div className="flex-1 overflow-auto p-8 relative">
         <div className="flex justify-between items-center mb-6">
            <div className="flex items-center gap-4">
-              <div>
-                <h2 className="text-lg font-bold text-slate-800 dark:text-white">Panel Breakdown</h2>
-                <p className="text-sm text-slate-500 dark:text-slate-400">List of all panels and components.</p>
-              </div>
-              <button 
-                onClick={openModal} 
-                className="ml-4 flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-all
-                bg-blue-600 text-white hover:bg-blue-700 hover:shadow-blue-500/30 active:scale-95"
-              >
-                <Plus size={18} strokeWidth={3} /> Tambah Panel
-              </button>
+             <div>
+               <h2 className="text-lg font-bold text-slate-800 dark:text-white">Panel Breakdown</h2>
+               <p className="text-sm text-slate-500 dark:text-slate-400">Manage components and pricing details.</p>
+             </div>
+             <button onClick={openModal} className="ml-4 flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 active:scale-95 shadow-sm transition">
+               <Plus size={18} strokeWidth={3} /> Tambah Panel
+             </button>
            </div>
-           
-           <div className="relative">
-             <input type="text" placeholder="Search panel..." className="pl-10 pr-4 py-2.5 rounded-lg text-sm outline-none w-[320px] shadow-sm transition-all
-               bg-white border border-slate-300 text-slate-800 focus:ring-2 focus:ring-blue-100 focus:border-blue-500
-               dark:bg-slate-900 dark:border-slate-700 dark:text-slate-200 dark:placeholder:text-slate-500 dark:focus:ring-blue-900/50"/>
-             <Search className="absolute left-3 top-2.5 text-slate-400 dark:text-slate-500" size={18}/>
-           </div>
+
+           {(colFilters.description || colFilters.brand || colFilters.qty || colFilters.unit) && (
+             <div className="flex items-center gap-2 px-3 py-1.5 bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-lg text-xs animate-in fade-in">
+               <Filter size={12} />
+               <span>Filters Active</span>
+               <button onClick={() => setColFilters({description:'', brand:'', qty:'', unit:''})} className="ml-2 p-1 hover:bg-yellow-200 rounded-full font-bold text-red-500"><X size={12}/></button>
+             </div>
+           )}
         </div>
 
-        {/* === TABEL UTAMA PANEL === */}
-        <div className="rounded-xl shadow-sm overflow-hidden mb-20 transition-colors
-          bg-white border border-slate-200 dark:bg-slate-900 dark:border-slate-800">
-          
+        {/* TABLE */}
+        <div className="rounded-xl shadow-sm overflow-hidden mb-20 bg-white border border-slate-200 dark:bg-slate-900 dark:border-slate-800">
           <table className="w-full min-w-[1000px]">
-            <thead className="border-b transition-colors bg-blue-50/50 border-blue-100 dark:bg-slate-800 dark:border-slate-700">
-              <tr>
-                {['Panel Type', 'Qty', 'Unit Price', 'Total Price', 'Actions'].map((h, i) => (
-                   <th key={i} className={`px-6 py-4 text-xs font-bold uppercase tracking-wider ${i===4?'text-center':'text-left'}
-                     text-blue-800 dark:text-blue-400`}>
-                     {h}
-                   </th>
-                ))}
-              </tr>
+            <thead className="border-b bg-blue-50/50 border-blue-100 dark:bg-slate-800 dark:border-slate-700">
+              <tr>{['Panel Type', 'Qty', 'Unit Price (Est)', 'Total Price', 'Actions'].map((h, i) => (<th key={i} className={`px-6 py-4 text-xs font-bold uppercase tracking-wider ${i===4?'text-center':'text-left'} text-blue-800 dark:text-blue-400`}>{h}</th>))}</tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {panels.map((item) => {
                 const level = rowLevels[item.id] || 0; 
                 const isOpen = level > 0;
+                
+                const filteredMaterials = item.materials ? item.materials.filter(mat => {
+                  const matchDesc = !colFilters.description || (mat.detail.toLowerCase().includes(colFilters.description.toLowerCase()) || mat.item.toLowerCase().includes(colFilters.description.toLowerCase()));
+                  const matchBrand = !colFilters.brand || mat.brand.toLowerCase().includes(colFilters.brand.toLowerCase());
+                  const matchQty = !colFilters.qty || mat.qty.toString().includes(colFilters.qty);
+                  const matchUnit = !colFilters.unit || mat.unit.toLowerCase().includes(colFilters.unit.toLowerCase());
+                  return matchDesc && matchBrand && matchQty && matchUnit;
+                }) : [];
 
                 return (
                   <React.Fragment key={item.id}>
-                    {/* BARIS DATA PANEL */}
-                    <tr className={`transition-all duration-200 border-l-4 
-                      ${isOpen 
-                        ? 'bg-blue-50/30 border-l-blue-600 dark:bg-blue-900/10 dark:border-l-blue-500' 
-                        : 'hover:bg-slate-50 border-l-transparent dark:hover:bg-slate-800/50'}`}>
-                      
+                    <tr className={`transition-all duration-200 border-l-4 ${isOpen ? 'bg-blue-50/30 border-l-blue-600 dark:bg-blue-900/10 dark:border-l-blue-500' : 'hover:bg-slate-50 border-l-transparent dark:hover:bg-slate-800/50'}`}>
                       <td className="px-6 py-5">
                         <div className="flex flex-col gap-2">
-                          <span className={`text-base font-bold transition-colors ${isOpen ? 'text-blue-700 dark:text-blue-400' : 'text-slate-800 dark:text-slate-200'}`}>
-                            {item.jenis}
-                          </span>
-                          
-                          {/* TOMBOL KONTROL LEVEL (VIEW DETAILS) */}
+                          <span className={`text-base font-bold transition-colors ${isOpen ? 'text-blue-700 dark:text-blue-400' : 'text-slate-800 dark:text-slate-200'}`}>{item.jenis}</span>
                           <div className="flex items-center gap-2 mt-1">
-                            <button 
-                              onClick={() => changeLevel(item.id, 'NEXT')} 
-                              disabled={level >= 4}
-                              className={`
-                                flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all border shadow-sm
-                                ${level >= 4 
-                                  ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed dark:bg-slate-800 dark:text-slate-600 dark:border-slate-700' 
-                                  : 'bg-white text-blue-700 border-blue-200 hover:bg-blue-50 hover:border-blue-400 dark:bg-slate-800 dark:text-blue-400 dark:border-slate-600 dark:hover:bg-slate-700'
-                                }
-                              `}
-                            >
-                              {level === 0 ? <Eye size={14}/> : <ArrowRight size={14}/>}
-                              {level === 0 ? "View Details" : `Show Level ${level + 1}`}
+                            <button onClick={() => changeLevel(item.id, 'NEXT')} disabled={level >= 4} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all border shadow-sm ${level >= 4 ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white text-blue-700 border-blue-200 hover:bg-blue-50'}`}>
+                              {level === 0 ? <Eye size={14}/> : <ArrowRight size={14}/>} {level === 0 ? "View Details" : `Show Level ${level + 1}`}
                             </button>
-
-                            {isOpen && (
-                              <button 
-                                onClick={() => changeLevel(item.id, 'CLOSE')}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all shadow-sm border
-                                  bg-white text-red-600 border-red-200 hover:bg-red-50 hover:border-red-400
-                                  dark:bg-slate-800 dark:text-red-400 dark:border-red-900/50 dark:hover:bg-red-900/20"
-                              >
-                                <X size={14} /> Close
-                              </button>
-                            )}
+                            {isOpen && <button onClick={() => changeLevel(item.id, 'CLOSE')} className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all shadow-sm border bg-white text-red-600 border-red-200 hover:bg-red-50"><X size={14} /> Close</button>}
                           </div>
                         </div>
                       </td>
@@ -242,119 +414,54 @@ const ProjectDetail = () => {
                       <td className="px-6 py-5 font-bold text-base text-slate-800 dark:text-slate-200">{formatRupiah(item.hargaAkhir)}</td>
                       <td className="px-6 py-5 text-center">
                         <div className="flex justify-center gap-2">
-                           
-                           {/* --- TOMBOL EDIT (Pindah ke Halaman Edit Panel) --- */}
-                           <button 
-                             onClick={() => navigate(`/project-detail/edit/${item.id}`)}
-                             className="p-2 rounded-lg transition-colors text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:text-slate-500 dark:hover:text-blue-400 dark:hover:bg-blue-900/30"
-                             title="Edit Detail Panel"
-                           >
-                             <FileEdit size={18} strokeWidth={2}/>
-                           </button>
-
-                           {/* TOMBOL DELETE */}
-                           <button 
-                             onClick={() => handleDeletePanel(item.id)} 
-                             className="p-2 rounded-lg transition-colors text-slate-400 hover:text-red-600 hover:bg-red-50 dark:text-slate-500 dark:hover:text-red-400 dark:hover:bg-red-900/30"
-                             title="Hapus Panel"
-                           >
-                             <Trash2 size={18} strokeWidth={2}/>
-                           </button>
+                           <button onClick={() => navigate(`/project-detail/edit/${item.id}`)} className="p-2 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50"><FileEdit size={18}/></button>
+                           <button onClick={() => handleDeletePanel(item.id)} className="p-2 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50"><Trash2 size={18}/></button>
                         </div>
                       </td>
                     </tr>
-
-                    {/* === NESTED TABLE (MATERIAL DETAILS) === */}
+                    
                     {isOpen && (
                       <tr>
                         <td colSpan="6" className="p-0 border-t border-blue-100 dark:border-slate-700">
-                          <div className="p-6 shadow-inner transition-colors bg-slate-50/50 dark:bg-slate-950/50">
-                             <div className="rounded-lg shadow-sm overflow-hidden border bg-white border-slate-200 dark:bg-slate-900 dark:border-slate-700">
-                               <div className="overflow-x-auto">
+                          <div className="p-6 shadow-inner bg-slate-50/50 dark:bg-slate-950/50">
+                             <div className="rounded-lg shadow-sm overflow-visible border bg-white border-slate-200 dark:bg-slate-900 dark:border-slate-700">
+                               <div className="overflow-x-visible">
                                  <table className="w-full text-sm">
                                    <thead>
-                                     <tr className="bg-slate-800 text-slate-200 dark:bg-black dark:text-slate-400">
-                                       {/* LEVEL 1 HEADER */}
-                                       <th className="p-3 font-semibold text-left min-w-[200px] pl-6 border-r border-slate-700">Material Name</th>
-                                       <th className="p-3 font-semibold text-left border-r border-slate-700">Brand</th>
-                                       <th className="p-3 font-semibold text-center border-r border-slate-700">Qty</th>
-                                       <th className="p-3 font-semibold text-center border-r border-slate-700">Unit</th>
-
-                                       {/* LEVEL 2 HEADER */}
-                                       {level >= 2 && (
-                                         <>
-                                          <th className="p-3 font-semibold text-center border-t-2 border-t-blue-400 bg-slate-700 dark:bg-slate-800">Factor</th>
-                                          <th className="p-3 font-semibold text-center border-t-2 border-t-blue-400 bg-slate-700 dark:bg-slate-800">Disc %</th>
-                                          <th className="p-3 font-semibold text-right border-t-2 border-t-blue-400 bg-slate-700 dark:bg-slate-800">Unit Price</th>
-                                          <th className="p-3 font-semibold text-right border-t-2 border-t-blue-400 bg-slate-700 dark:bg-slate-800 border-r border-slate-600">Total</th>
-                                         </>
-                                       )}
-
-                                       {/* LEVEL 3 HEADER */}
-                                       {level >= 3 && (
-                                         <>
-                                          <th className="p-3 font-semibold border-t-2 border-t-purple-400 bg-slate-700/80 dark:bg-slate-800/80">Vendor</th>
-                                          <th className="p-3 font-semibold text-center border-t-2 border-t-purple-400 bg-slate-700/80 dark:bg-slate-800/80 border-r border-slate-600">PO No</th>
-                                         </>
-                                       )}
-
-                                       {/* LEVEL 4 HEADER */}
-                                       {level >= 4 && (
-                                         <th className="p-3 font-semibold border-t-2 border-t-orange-400 bg-slate-700/60 dark:bg-slate-800/60">Status</th>
-                                       )}
+                                     <tr className="bg-slate-100 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+                                       <ColumnFilter label="Description / Detail" field="description" currentFilter={colFilters.description} onFilterChange={handleColFilterChange} />
+                                       <ColumnFilter label="Brand" field="brand" currentFilter={colFilters.brand} onFilterChange={handleColFilterChange} />
+                                       <ColumnFilter label="Qty" field="qty" currentFilter={colFilters.qty} onFilterChange={handleColFilterChange} />
+                                       <ColumnFilter label="Unit" field="unit" currentFilter={colFilters.unit} onFilterChange={handleColFilterChange} />
+                                       {level >= 2 && (<><th className="p-3 text-center bg-slate-50 dark:bg-slate-800 border-r dark:border-slate-700">Fctr</th><th className="p-3 text-center bg-slate-50 dark:bg-slate-800 border-r dark:border-slate-700">Disc%</th><th className="p-3 text-right bg-slate-50 dark:bg-slate-800 border-r dark:border-slate-700">Unit Price</th><th className="p-3 text-right bg-slate-50 dark:bg-slate-800 border-r dark:border-slate-700">Total</th></>)}
+                                       {level >= 3 && (<><th className="p-3 bg-slate-50 dark:bg-slate-800 border-r dark:border-slate-700">Vendor</th><th className="p-3 text-right bg-slate-50 dark:bg-slate-800 border-r dark:border-slate-700">MH</th></>)}
+                                       {level >= 4 && (<th className="p-3 bg-slate-50 dark:bg-slate-800 border-r dark:border-slate-700">Status</th>)}
                                      </tr>
                                    </thead>
                                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                                     {item.materials && item.materials.length > 0 ? (
-                                        item.materials.map((mat) => (
-                                          <tr key={mat.id} className="transition-colors hover:bg-slate-50 text-slate-700 dark:hover:bg-slate-800 dark:text-slate-300">
-                                            {/* DATA LEVEL 1 */}
-                                            <td className="p-3 pl-6 font-medium border-r border-slate-100 dark:border-slate-800 text-slate-900 dark:text-slate-200">{mat.name}</td>
-                                            <td className="p-3 border-r border-slate-100 dark:border-slate-800"><span className="text-xs px-2 py-0.5 rounded border bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700">{mat.brand}</span></td>
-                                            <td className="p-3 text-center border-r border-slate-100 dark:border-slate-800">{mat.qty}</td>
-                                            <td className="p-3 text-center border-r border-slate-100 dark:border-slate-800 text-slate-500 dark:text-slate-500">{mat.unit}</td>
-
-                                            {/* DATA LEVEL 2 */}
-                                            {level >= 2 && (
-                                              <>
-                                                <td className="p-3 text-center border-r border-slate-100 dark:border-slate-800 bg-blue-50/20 dark:bg-blue-900/10">{mat.factor}</td>
-                                                <td className="p-3 text-center font-bold text-slate-500 border-r border-slate-100 dark:border-slate-800 bg-blue-50/20 dark:bg-blue-900/10">{mat.diskon}</td>
-                                                <td className="p-3 text-right border-r border-slate-100 dark:border-slate-800 bg-blue-50/20 dark:bg-blue-900/10">{formatRupiah(mat.price)}</td>
-                                                <td className="p-3 text-right font-bold text-blue-700 dark:text-blue-400 border-r border-slate-100 dark:border-slate-800 bg-blue-50/20 dark:bg-blue-900/10">{formatRupiah(mat.price * mat.qty)}</td>
-                                              </>
-                                            )}
-
-                                            {/* DATA LEVEL 3 */}
-                                            {level >= 3 && (
-                                              <>
-                                                <td className="p-3 border-r border-slate-100 dark:border-slate-800 bg-purple-50/20 dark:bg-purple-900/10">Graha El</td>
-                                                <td className="p-3 text-center border-r border-slate-100 dark:border-slate-800 bg-purple-50/20 dark:bg-purple-900/10"><span className="text-xs font-mono text-purple-700 dark:text-purple-400">PO-212</span></td>
-                                              </>
-                                            )}
-
-                                            {/* DATA LEVEL 4 */}
-                                            {level >= 4 && (
-                                              <td className="p-3 bg-orange-50/20 dark:bg-orange-900/10">
-                                                <span className="text-[10px] font-bold uppercase text-green-700 bg-green-100 dark:text-green-300 dark:bg-green-900/50 px-2 py-0.5 rounded-full">Ready</span>
+                                     {filteredMaterials.length > 0 ? (
+                                        filteredMaterials.map((mat) => (
+                                            <tr key={mat.id} className="hover:bg-slate-50 dark:hover:bg-slate-800">
+                                              <td className="p-3 pl-6 border-r font-medium">
+                                                <HighlightText text={mat.detail} highlight={colFilters.description} />
+                                                <div className="text-[10px] text-slate-400"><HighlightText text={mat.item} highlight={colFilters.description} /></div>
                                               </td>
-                                            )}
-                                          </tr>
+                                              <td className="p-3 border-r"><span className="text-xs px-2 py-0.5 rounded border bg-slate-100 dark:bg-slate-800"><HighlightText text={mat.brand} highlight={colFilters.brand} /></span></td>
+                                              <td className="p-3 text-center border-r"><HighlightText text={mat.qty} highlight={colFilters.qty} /></td>
+                                              <td className="p-3 text-center border-r text-slate-500"><HighlightText text={mat.unit} highlight={colFilters.unit} /></td>
+                                              {level >= 2 && (<><td className="p-3 text-center border-r bg-blue-50/20">{mat.factor}</td><td className="p-3 text-center border-r bg-blue-50/20">{mat.diskon}</td><td className="p-3 text-right border-r bg-blue-50/20 text-xs font-mono">{renderPrice(getMaterialPrice(mat), mat.currency)}</td><td className="p-3 text-right border-r bg-blue-50/20 font-bold text-blue-700">{renderPrice(calculateTotalMaterial(mat), mat.currency)}</td></>)}
+                                              {level >= 3 && (<><td className="p-3 border-r bg-purple-50/20">{mat.vendor}</td><td className="p-3 text-right border-r bg-purple-50/20">{mat.manHour}</td></>)}
+                                              {level >= 4 && (<td className="p-3 bg-orange-50/20"><span className="text-[10px] font-bold uppercase text-green-700 bg-green-100 px-2 py-0.5 rounded-full">Ready</span></td>)}
+                                            </tr>
                                         ))
-                                     ) : (
-                                        <tr><td colSpan={12} className="p-4 text-center text-slate-400 text-sm italic">Tidak ada material bawaan. Klik tombol Edit untuk menambah material.</td></tr>
-                                     )}
+                                      ) : (
+                                        <tr><td colSpan={12} className="p-6 text-center italic text-slate-400">{item.materials && item.materials.length > 0 ? "No items match your filter." : "No Materials"}</td></tr>
+                                      )}
                                    </tbody>
                                  </table>
                                </div>
-                               
-                               <div className="p-2 border-t text-center transition-colors bg-slate-50 border-slate-200 dark:bg-slate-800 dark:border-slate-700">
-                                  {level < 4 ? (
-                                    <button onClick={() => changeLevel(item.id, 'NEXT')} className="text-xs font-bold hover:underline text-blue-600 dark:text-blue-400">
-                                      Show More Columns (Level {level + 1})
-                                    </button>
-                                  ) : (
-                                    <span className="text-xs font-medium text-slate-400 dark:text-slate-500">All columns visible</span>
-                                  )}
+                               <div className="p-2 border-t text-center bg-slate-50 border-slate-200 dark:bg-slate-800 dark:border-slate-700">
+                                  {level < 4 ? (<button onClick={() => changeLevel(item.id, 'NEXT')} className="text-xs font-bold hover:underline text-blue-600">Show Level {level + 1}</button>) : (<span className="text-xs font-medium text-slate-400">All visible</span>)}
                                </div>
                              </div>
                           </div>
@@ -368,103 +475,86 @@ const ProjectDetail = () => {
           </table>
         </div>
       </div>
-
-      {/* === MODAL TAMBAH PANEL (SEARCHABLE) === */}
+      
+      {/* MODAL SEARCH & ADD PANEL */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-visible">
-            
-            <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-900">
-              <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                 <CheckCircle size={20} className="text-blue-600"/> Pilih Panel (Master)
-              </h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-red-500 transition"><X size={20} /></button>
-            </div>
-
-            <form onSubmit={handleAddPanel} className="p-6 space-y-5">
-              
-              {/* DROPDOWN PENCARIAN */}
-              <div className="relative" ref={dropdownRef}>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Cari Jenis Panel</label>
-                <div className="relative">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 p-6">
+             <h3 className="text-lg font-bold mb-4">Pilih atau Buat Panel</h3>
+             <form onSubmit={handleAddPanel} className="space-y-4">
+                
+                {/* Search / Create Input */}
+                <div className="relative" ref={dropdownRef}>
+                  <label className="text-xs font-bold text-slate-500 mb-1 block">Nama Panel</label>
                   <input 
                     type="text" 
-                    placeholder="Ketik nama panel..." 
-                    className="w-full pl-10 pr-10 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                    value={searchTerm}
+                    placeholder="Cari atau ketik nama panel baru..." 
+                    className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none" 
+                    value={modalSearchTerm} 
                     onChange={(e) => {
-                      setSearchTerm(e.target.value);
+                      setModalSearchTerm(e.target.value); 
+                      // Update form jenis real-time jika custom
+                      setNewPanelForm(prev => ({...prev, jenis: e.target.value}));
                       setIsDropdownOpen(true);
-                    }}
+                    }} 
                     onFocus={() => setIsDropdownOpen(true)}
                   />
-                  <Search className="absolute left-3 top-3 text-slate-400" size={16}/>
-                  <div className="absolute right-3 top-3 pointer-events-none text-slate-400">
-                    <ChevronDown size={16} />
-                  </div>
+                  
+                  {/* Dropdown Results */}
+                  {isDropdownOpen && modalSearchTerm && (
+                    <div className="absolute w-full bg-white border mt-1 max-h-48 overflow-auto z-10 shadow-lg rounded-lg">
+                      {/* Opsi Panel yang Ada */}
+                      {filteredMasterPanels.length > 0 && (
+                        <div className="border-b border-slate-100">
+                          <div className="px-3 py-1 text-[10px] text-slate-400 uppercase font-bold bg-slate-50">Master Panel</div>
+                          {filteredMasterPanels.map(mp => (
+                            <div 
+                              key={mp.id} 
+                              className="px-4 py-2 hover:bg-blue-50 cursor-pointer text-sm text-slate-700"
+                              onClick={() => handleSelectPanel(mp)}
+                            >
+                              {mp.name}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Opsi Buat Baru (Selalu muncul jika ada teks) */}
+                      <div 
+                        className="px-4 py-3 hover:bg-green-50 cursor-pointer text-sm text-green-700 font-medium flex items-center gap-2"
+                        onClick={handleCreateCustomPanel}
+                      >
+                        <PlusCircle size={16}/>
+                        Buat panel baru: "{modalSearchTerm}"
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                {/* HASIL PENCARIAN */}
-                {isDropdownOpen && (
-                  <div className="absolute w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-50 max-h-60 overflow-y-auto">
-                    {filteredMasterPanels.length > 0 ? (
-                      filteredMasterPanels.map((mp) => (
-                        <div 
-                          key={mp.id} 
-                          className="px-4 py-3 hover:bg-blue-50 dark:hover:bg-slate-700 cursor-pointer border-b border-slate-50 dark:border-slate-700/50 flex justify-between items-center group"
-                          onClick={() => handleSelectPanel(mp)}
-                        >
-                          <span className="text-sm font-medium text-slate-700 dark:text-slate-200 group-hover:text-blue-700 dark:group-hover:text-blue-400">
-                            {mp.name}
-                          </span>
-                          {newPanelForm.idMaster === mp.id && <Check size={16} className="text-blue-600"/>}
-                        </div>
-                      ))
-                    ) : (
-                      <div className="px-4 py-3 text-sm text-slate-400 italic text-center">
-                        Panel tidak ditemukan.
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
+                {/* Input Jumlah */}
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Jumlah</label>
+                  <label className="text-xs font-bold text-slate-500 mb-1 block">Jumlah</label>
                   <input 
                     type="number" 
-                    min="1" 
-                    className="w-full px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
                     value={newPanelForm.jumlah} 
-                    onChange={(e) => setNewPanelForm({...newPanelForm, jumlah: e.target.value})}
+                    onChange={e => setNewPanelForm({...newPanelForm, jumlah: e.target.value})} 
+                    className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none" 
+                    min="1"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Harga Satuan</label>
-                  <input 
-                    type="text" 
-                    disabled 
-                    className="w-full px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 text-slate-500 cursor-not-allowed font-medium"
-                    value={formatRupiah(newPanelForm.hargaSatuan)}
-                  />
+
+                {/* Action Buttons */}
+                <div className="flex justify-end gap-2 mt-4 pt-4 border-t">
+                  <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 border rounded hover:bg-slate-100 text-sm font-bold text-slate-600">Batal</button>
+                  <button 
+                    type="submit" 
+                    disabled={!newPanelForm.jenis} 
+                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-bold shadow-md disabled:opacity-50"
+                  >
+                    {newPanelForm.idMaster ? "Tambah Panel" : "Buat Panel Baru"}
+                  </button>
                 </div>
-              </div>
-
-              <div className="pt-2">
-                 <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/50 rounded-lg flex justify-between items-center text-sm">
-                    <span className="text-slate-600 dark:text-slate-400">Total Estimasi:</span>
-                    <span className="font-bold text-blue-700 dark:text-blue-300 text-lg">
-                      {formatRupiah(newPanelForm.jumlah * newPanelForm.hargaSatuan)}
-                    </span>
-                 </div>
-              </div>
-
-              <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition">Batal</button>
-                <button type="submit" disabled={!newPanelForm.idMaster} className="flex-1 py-2.5 rounded-lg bg-blue-600 text-white font-bold hover:bg-blue-700 shadow-lg shadow-blue-600/20 transition disabled:opacity-50 disabled:cursor-not-allowed">Tambahkan</button>
-              </div>
-            </form>
+             </form>
           </div>
         </div>
       )}
