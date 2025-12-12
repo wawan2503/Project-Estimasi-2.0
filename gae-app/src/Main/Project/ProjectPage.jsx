@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Search, Plus, ChevronRight, Activity, 
-  X, Save, Briefcase, User, DollarSign, Hash, PenTool
+  X, Save, Briefcase, User, Hash, PenTool
 } from 'lucide-react';
 import { projectsData, formatRupiah } from '../../data/mockData';
 
@@ -13,12 +13,11 @@ const ProjectPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // --- STATE FORM (Hanya 5 Kolom Sesuai Request) ---
+  // --- STATE FORM (Total Value DIHAPUS) ---
   const [newProject, setNewProject] = useState({
     jobNo: '',
     projectName: '',
     customer: '',
-    totalValue: '',
     creator: '' 
   });
 
@@ -36,8 +35,9 @@ const ProjectPage = () => {
       console.log("Data Tersimpan:", newProject);
       setLoading(false);
       setIsModalOpen(false);
-      // Reset form
-      setNewProject({ jobNo: '', projectName: '', customer: '', totalValue: '', creator: '' });
+      
+      // Reset form (Total Value dihapus dari sini)
+      setNewProject({ jobNo: '', projectName: '', customer: '', creator: '' });
     }, 1000);
   };
 
@@ -210,30 +210,16 @@ const ProjectPage = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                {/* 4. Total Value */}
-                <div className="space-y-1.5">
-                  <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2">
-                    <DollarSign size={16} className="text-yellow-500"/> Total Value
-                  </label>
-                  <input 
-                    type="number" name="totalValue" placeholder="0" 
-                    className="w-full px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-right font-mono text-slate-800 dark:text-slate-200"
-                    value={newProject.totalValue} onChange={handleChange}
-                  />
-                </div>
-
-                {/* 5. Creator */}
-                <div className="space-y-1.5">
-                  <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2">
-                    <PenTool size={16} className="text-purple-500"/> Creator
-                  </label>
-                  <input 
-                    type="text" name="creator" placeholder="Created By" 
-                    className="w-full px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-slate-800 dark:text-slate-200"
-                    value={newProject.creator} onChange={handleChange}
-                  />
-                </div>
+              {/* 4. Creator (Sekarang Full Width) */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                  <PenTool size={16} className="text-purple-500"/> Creator
+                </label>
+                <input 
+                  type="text" name="creator" placeholder="Created By" 
+                  className="w-full px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-slate-800 dark:text-slate-200"
+                  value={newProject.creator} onChange={handleChange}
+                />
               </div>
 
               {/* Action Buttons */}
