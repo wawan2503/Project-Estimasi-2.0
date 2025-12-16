@@ -4,7 +4,7 @@ import {
   Search, Plus, ChevronRight, Activity, 
   X, Save, Briefcase, User, Hash, PenTool
 } from 'lucide-react';
-import { projectsData, formatRupiah } from '../../data/mockData';
+import { projectsData, formatRupiah, calculateProjectTotal } from '../../data/mockData';
 
 const ProjectPage = () => {
   const navigate = useNavigate();
@@ -115,7 +115,7 @@ const ProjectPage = () => {
                       {project.customer}
                     </div>
                   </td>
-                  <td className="px-6 py-4 font-bold text-slate-700 dark:text-slate-300">{formatRupiah(project.harga)}</td>
+                  <td className="px-6 py-4 font-bold text-slate-700 dark:text-slate-300">{formatRupiah(calculateProjectTotal(project))}</td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center text-xs font-bold">

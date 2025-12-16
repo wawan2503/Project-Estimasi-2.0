@@ -112,6 +112,12 @@ const ProductPage = ({ setSidebarOpen }) => {
     return { priceAfterDiscUSD, priceBecomeIDR, priceAfterDiscIDR, priceAfterManHour, totalPrice };
   };
 
+  // Calculate panel price from materials
+  const calculatePanelPrice = (panel) => {
+    if (!panel.defaultMaterials || panel.defaultMaterials.length === 0) return panel.price || 0;
+    return panel.defaultMaterials.reduce((sum, mat) => sum + calculateRow(mat).totalPrice, 0);
+  };
+
   const filteredPanels = panels.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
   return (
@@ -152,7 +158,7 @@ const ProductPage = ({ setSidebarOpen }) => {
                   </div>
                   <div>
                     <h3 className="font-bold text-lg text-slate-800 dark:text-white">{panel.name}</h3>
-                    <span className="text-sm text-slate-500">{panel.defaultMaterials.length} items • {formatRupiah(panel.price)}</span>
+                    <span className="text-sm text-slate-500">{panel.defaultMaterials.length} items • {formatRupiah(calculatePanelPrice(panel))}</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -165,7 +171,7 @@ const ProductPage = ({ setSidebarOpen }) => {
               {expandedPanels[panel.id] && (
                 <div className="border-t border-slate-200 dark:border-slate-800">
                   <div className="overflow-x-auto">
-                    <table className="w-full text-xs min-w-[1400px]">
+                    <table className="w-full text-xs min-w-[1800px]">
                       <thead className="text-white text-[11px]">
                         <tr className="bg-slate-800">
                           <th className="p-2 border-r border-slate-600 text-left w-24">Item</th>
@@ -179,9 +185,14 @@ const ProductPage = ({ setSidebarOpen }) => {
                           <th className="p-2 border-r border-slate-600 bg-blue-900 text-center w-14">Unit</th>
                           <th className="p-2 border-r border-slate-600 bg-blue-900 text-right w-24">Int.Price</th>
                           <th className="p-2 border-r border-slate-600 bg-blue-900 text-right w-24">Loc.Price</th>
+                          <th className="p-2 border-r border-slate-600 bg-blue-900 text-center w-12">Cur</th>
                           <th className="p-2 border-r border-slate-600 bg-green-900 text-center w-14">Fctr</th>
                           <th className="p-2 border-r border-slate-600 bg-green-900 text-center w-14">Disc%</th>
                           <th className="p-2 border-r border-slate-600 bg-green-900 text-center w-20">ManHour</th>
+                          <th className="p-2 border-r border-slate-600 bg-slate-700 text-right w-24">Stl Disc(USD)</th>
+                          <th className="p-2 border-r border-slate-600 bg-slate-700 text-right w-24">To IDR</th>
+                          <th className="p-2 border-r border-slate-600 bg-slate-700 text-right w-24">Stl Disc(IDR)</th>
+                          <th className="p-2 border-r border-slate-600 bg-slate-700 text-right w-24">Price+MH</th>
                           <th className="p-2 border-r border-slate-600 bg-blue-800 text-right w-28 font-bold text-yellow-300">TOTAL</th>
                           <th className="p-2 bg-slate-800 w-10 text-center">#</th>
                         </tr>
@@ -234,6 +245,7 @@ const ProductPage = ({ setSidebarOpen }) => {
                               <td className="p-1 border-r text-center text-xs">{mat.unit}</td>
                               <td className="p-2 border-r text-right font-mono">{mat.internationalPrice > 0 ? formatUSD(mat.internationalPrice) : '-'}</td>
                               <td className="p-2 border-r text-right font-mono">{formatRupiah(mat.localPrice)}</td>
+                              <td className="p-1 border-r text-center text-[10px]">{mat.currency || 'IDR'}</td>
                               <td className="p-1 border-r">
                                 <input type="number" className="w-full p-1.5 text-center bg-green-50/50 outline-none rounded text-xs" value={mat.factor} onChange={(e) => handleMaterialChange(panel.id, mat.id, 'factor', parseFloat(e.target.value) || 1)} />
                               </td>
@@ -243,6 +255,10 @@ const ProductPage = ({ setSidebarOpen }) => {
                               <td className="p-1 border-r">
                                 <input type="number" className="w-full p-1.5 text-center bg-green-50/50 outline-none rounded text-xs" value={mat.manHour} onChange={(e) => handleMaterialChange(panel.id, mat.id, 'manHour', parseFloat(e.target.value) || 0)} />
                               </td>
+                              <td className="p-2 border-r text-right text-slate-500 font-mono bg-slate-50">{calc.priceAfterDiscUSD > 0 ? formatUSD(calc.priceAfterDiscUSD) : '-'}</td>
+                              <td className="p-2 border-r text-right text-slate-500 font-mono bg-slate-50">{calc.priceBecomeIDR > 0 ? formatRupiah(calc.priceBecomeIDR) : '-'}</td>
+                              <td className="p-2 border-r text-right text-slate-500 font-mono bg-slate-50">{calc.priceAfterDiscIDR > 0 ? formatRupiah(calc.priceAfterDiscIDR) : '-'}</td>
+                              <td className="p-2 border-r text-right font-medium font-mono bg-slate-50">{formatRupiah(calc.priceAfterManHour)}</td>
                               <td className="p-2 border-r text-right bg-blue-50 text-blue-800 font-bold font-mono">{formatRupiah(calc.totalPrice)}</td>
                               <td className="p-1 text-center">
                                 <button onClick={() => handleDeleteMaterial(panel.id, mat.id)} className="text-slate-400 hover:text-red-500 p-1 rounded"><Trash2 size={14} /></button>

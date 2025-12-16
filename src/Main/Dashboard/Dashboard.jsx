@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Edit2, Clock, Package, Layers, Briefcase, Box, Trash2, PlusCircle } from 'lucide-react';
-import { projectsData, masterComponents, masterPanels, formatRupiah } from '../../data/mockData';
+import { projectsData, masterComponents, masterPanels, formatRupiah, calculateProjectTotal } from '../../data/mockData';
 import MobileHeader from '../../components/MobileHeader';
 
 const Dashboard = ({ setSidebarOpen }) => {
@@ -10,7 +10,7 @@ const Dashboard = ({ setSidebarOpen }) => {
   const totalProjects = projectsData.length;
   const totalMaterials = masterComponents.length;
   const totalPanels = masterPanels.length;
-  const totalProjectValue = projectsData.reduce((sum, p) => sum + p.harga, 0);
+  const totalProjectValue = projectsData.reduce((sum, p) => sum + calculateProjectTotal(p), 0);
 
   // Recent Activities (sample data)
   const recentActivities = [
@@ -132,7 +132,7 @@ const Dashboard = ({ setSidebarOpen }) => {
                       <td className="px-4 py-3 font-mono text-xs font-bold text-blue-600">{project.jobNo}</td>
                       <td className="px-4 py-3 font-semibold text-slate-800 dark:text-white">{project.namaProject}</td>
                       <td className="px-4 py-3 text-slate-500 hidden sm:table-cell">{project.customer}</td>
-                      <td className="px-4 py-3 text-right font-medium">{formatRupiah(project.harga)}</td>
+                      <td className="px-4 py-3 text-right font-medium">{formatRupiah(calculateProjectTotal(project))}</td>
                     </tr>
                   ))}
                 </tbody>

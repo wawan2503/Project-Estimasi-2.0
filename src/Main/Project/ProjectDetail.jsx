@@ -7,13 +7,12 @@ import ProjectWord from '../../Pages/ProjectWord';
 import DetailPanel from './DetailPanel.jsx'; // <-- new import
 
 import {
-  FileEdit, ChevronLeft, Plus, ArrowRight, X, Save, Eye, Trash2, Filter, PlusCircle
+  FileEdit, ChevronLeft, Plus, ArrowRight, X, Save, Eye, Trash2, Filter, PlusCircle, Calculator
 } from 'lucide-react';
 
-import { projectsData, masterPanels, formatRupiah, formatUSD } from '../../data/mockData';
+import { projectsData, masterPanels, formatRupiah, formatUSD, KURS_USD, calculateMaterialPrice, calculatePanelTotal as calcPanelTotal } from '../../data/mockData';
 
 // --- CONSTANTS ---
-const KURS_USD = 16000;
 const scrollContainerStyle = {
   scrollbarWidth: 'thin',
   scrollbarColor: '#94a3b8 #f1f5f9'
@@ -53,7 +52,7 @@ const HighlightText = ({ text, highlight }) => {
   return <span>{parts.map((part, i) => part.toLowerCase() === highlight.toLowerCase() ? <span key={i} className="bg-yellow-300 text-black font-bold px-0.5 rounded">{part}</span> : part)}</span>;
 };
 
-const ProjectDetail = () => {
+const ProjectDetail = ({ setSidebarOpen }) => {
   const navigate = useNavigate();
   const projectInfo = projectsData[0];
 
@@ -63,6 +62,11 @@ const ProjectDetail = () => {
   const [modalSearchTerm, setModalSearchTerm] = useState("");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
+
+  // Additional costs state
+  const [additionalCosts, setAdditionalCosts] = useState({
+    packing: 0, shipping: 0, installation: 0, testing: 0, documentation: 0, other: 0
+  });
 
   const [newPanelForm, setNewPanelForm] = useState({ idMaster: '', jenis: '', jumlah: 1, hargaSatuan: 0, defaultMaterials: [], isCustom: false });
   const [colFilters, setColFilters] = useState({ detail: '', brand: '', series: '', qty: '', unit: '' });
@@ -87,7 +91,32 @@ const ProjectDetail = () => {
     return { priceAfterDiscUSD, priceBecomeIDR, priceAfterDiscIDR, priceAfterManHour, totalPrice };
   };
 
-  // actions (same as you had)
+  // Calculate panel total - use local calculateRow for detailed view, calcPanelTotal for summary
+  const calculatePanelTotal = (panel) => {
+    if (!panel.materials || panel.materials.length === 0) {
+      return panel.hargaAkhir || (panel.jumlah * panel.hargaSatuan) || 0;
+    }
+    return panel.materials.reduce((sum, mat) => sum + calculateRow(mat).totalPrice, 0) * panel.jumlah;
+  };
+
+  // Calculate unit price (per 1 panel)
+  const calculateUnitPrice = (panel) => {
+    if (!panel.materials || panel.materials.length === 0) {
+      return panel.hargaSatuan || 0;
+    }
+    return panel.materials.reduce((sum, mat) => sum + calculateRow(mat).totalPrice, 0);
+  };
+
+  // Calculate totals
+  const subtotalPanels = panels.reduce((sum, panel) => sum + calculatePanelTotal(panel), 0);
+  const totalAdditionalCosts = Object.values(additionalCosts).reduce((sum, cost) => sum + (parseFloat(cost) || 0), 0);
+  const grandTotal = subtotalPanels + totalAdditionalCosts;
+
+  const handleAdditionalCostChange = (field, value) => {
+    setAdditionalCosts(prev => ({ ...prev, [field]: parseFloat(value) || 0 }));
+  };
+
+  // actions
   const changeLevel = (id, action) => {
     setRowLevels((prev) => {
       const current = prev[id] || 0;
@@ -176,8 +205,8 @@ const ProjectDetail = () => {
                       </td>
 
                       <td className="px-6 py-5 font-bold text-center">{item.jumlah}</td>
-                      <td className="px-6 py-5 text-sm text-slate-600 whitespace-nowrap">{formatRupiah(item.hargaSatuan)}</td>
-                      <td className="px-6 py-5 font-bold whitespace-nowrap">{formatRupiah(item.hargaAkhir)}</td>
+                      <td className="px-6 py-5 text-sm text-slate-600 whitespace-nowrap">{formatRupiah(calculateUnitPrice(item))}</td>
+                      <td className="px-6 py-5 font-bold whitespace-nowrap text-blue-600">{formatRupiah(calculatePanelTotal(item))}</td>
                       <td className="px-6 py-5 text-center flex justify-center gap-2">
                         <button onClick={() => navigate(`/project-detail/edit/${item.id}`)} className="p-2 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50"><FileEdit size={18}/></button>
                         <button onClick={() => handleDeletePanel(item.id)} className="p-2 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50"><Trash2 size={18}/></button>
@@ -208,7 +237,31 @@ const ProjectDetail = () => {
         </div>
       </div>
 
-      {/* modal (unchanged) */}
+      {/* Total Summary Section */}
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-lg border border-slate-200 dark:border-slate-800 p-4">
+        <div className="flex flex-col lg:flex-row gap-4">
+          {/* Biaya Tambahan - Compact Grid */}
+          <div className="flex-1">
+            <div className="text-xs font-bold text-slate-500 mb-2">Biaya Tambahan</div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {[{key:'packing',label:'Packing'},{key:'shipping',label:'Shipping'},{key:'installation',label:'Installation'},{key:'testing',label:'Testing'},{key:'documentation',label:'Documentation'},{key:'other',label:'Lainnya'}].map(({key,label})=>(
+                <div key={key} className="flex flex-col">
+                  <label className="text-[10px] text-slate-500 mb-0.5">{label}</label>
+                  <input type="number" value={additionalCosts[key]} onChange={(e)=>handleAdditionalCostChange(key,e.target.value)} className="border rounded px-2 py-1 text-right text-xs focus:ring-1 focus:ring-blue-500 outline-none w-full" placeholder="0"/>
+                </div>
+              ))}
+            </div>
+          </div>
+          {/* Summary */}
+          <div className="lg:w-72 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg p-3 border border-blue-100 dark:border-blue-800">
+            <div className="flex justify-between text-xs py-1"><span className="text-slate-600">Subtotal Panel</span><span className="font-medium">{formatRupiah(subtotalPanels)}</span></div>
+            <div className="flex justify-between text-xs py-1"><span className="text-slate-600">Biaya Tambahan</span><span className="font-medium">{formatRupiah(totalAdditionalCosts)}</span></div>
+            <div className="flex justify-between py-2 mt-1 border-t border-blue-200 dark:border-blue-700"><span className="text-sm font-bold text-slate-800 dark:text-slate-200">GRAND TOTAL</span><span className="text-base font-bold text-blue-600 dark:text-blue-400">{formatRupiah(grandTotal)}</span></div>
+          </div>
+        </div>
+      </div>
+
+      {/* modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in">
           <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 p-6">
