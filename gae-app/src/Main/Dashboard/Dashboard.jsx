@@ -1,204 +1,252 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Plus, ChevronRight, Edit2, Clock, Users, UserCheck, Monitor,
-  MoreHorizontal, ArrowUpRight, ArrowDownRight
-} from 'lucide-react';
-// Import Data dari MockData
-import { projectsData, formatRupiah } from '../../data/mockData';
+import { Plus, Edit2, Clock, Package, Layers, Briefcase, Box, Trash2, PlusCircle } from 'lucide-react';
+import { projectsData, masterComponents, masterPanels, formatRupiah } from '../../data/mockData';
+import MobileHeader from '../../components/MobileHeader';
 
-const Dashboard = () => {
+const Dashboard = ({ setSidebarOpen }) => {
   const navigate = useNavigate();
 
-  // --- DATA DUMMY KHUSUS DASHBOARD (Agar sesuai gambar referensi) ---
-  
-  // 1. Data Recent Panels (Sesuai gambar kanan atas)
-  const recentPanels = [
-    { id: 1, name: 'PHT TM', spec: '20kv', price: 1200200000 },
-    { id: 2, name: 'PHT TM', spec: '20kv', price: 1200200000 },
-    { id: 3, name: 'PHT TM', spec: '20kv', price: 1200200000 },
-    { id: 4, name: 'PHT TM', spec: '20kv', price: 1200200000 },
-    { id: 5, name: 'LVMDP', spec: '380v', price: 450000000 },
+  const totalProjects = projectsData.length;
+  const totalMaterials = masterComponents.length;
+  const totalPanels = masterPanels.length;
+  const totalProjectValue = projectsData.reduce((sum, p) => sum + p.harga, 0);
+
+  // Recent Activities (sample data)
+  const recentActivities = [
+    { id: 1, user: 'Wawan', action: 'Created', type: 'project', target: 'Ehouse', detail: 'Job No: E6-2117', time: '2 hours ago', color: 'green' },
+    { id: 2, user: 'Admin', action: 'Updated', type: 'material', target: 'MCCB', detail: 'Price changed', time: '3 hours ago', color: 'blue' },
+    { id: 3, user: 'Admin', action: 'Added', type: 'panel', target: 'PHB TM OUTGOING', detail: '2 materials added', time: '5 hours ago', color: 'purple' },
+    { id: 4, user: 'Wawan', action: 'Deleted', type: 'material', target: 'Old Component', detail: 'Removed from database', time: '1 day ago', color: 'red' },
+    { id: 5, user: 'Admin', action: 'Updated', type: 'project', target: 'Ehouse', detail: 'Panel qty changed', time: '1 day ago', color: 'blue' },
   ];
 
-  // 2. Data Recent Activities (Sesuai gambar tengah)
-  const recentActivities = [
-    { id: 1, user: 'Admin', action: 'Has Edit', target: 'Template', item: 'PHT TM', detail: 'Harga jadi', value: '1.200.200.000', time: '24 Nov 2025 14:23' },
-    { id: 2, user: 'Admin', action: 'Menghapus', target: 'Template', item: 'PHT TM', detail: '-', value: '-', time: '24 Nov 2025 14:20' },
-    { id: 3, user: 'Admin', action: 'Mengedit', target: 'Template', item: 'PHT TM', detail: 'Harga jadi', value: '1.200.200.000', time: '24 Nov 2025 14:15' },
-    { id: 4, user: 'Wawan', action: 'Created', target: 'Project', item: 'Ehouse', detail: 'New Job', value: 'E6-2117', time: '24 Nov 2025 10:00' },
-  ];
+  const getActionIcon = (action) => {
+    switch (action) {
+      case 'Created': return <PlusCircle size={14} />;
+      case 'Updated': return <Edit2 size={14} />;
+      case 'Added': return <PlusCircle size={14} />;
+      case 'Deleted': return <Trash2 size={14} />;
+      default: return <Clock size={14} />;
+    }
+  };
+
+  const getActionColor = (color) => {
+    const colors = {
+      green: 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400',
+      blue: 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400',
+      purple: 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400',
+      red: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',
+    };
+    return colors[color] || colors.blue;
+  };
 
   return (
-    <div className="flex-1 h-screen overflow-y-auto font-sans transition-colors duration-300 bg-slate-50 dark:bg-slate-950 p-6 md:p-8">
+    <div className="flex-1 flex flex-col h-screen overflow-hidden">
+      <MobileHeader setSidebarOpen={setSidebarOpen} title="Dashboard" />
       
-      {/* --- HEADER --- */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
-            Hello Wawan <span className="text-2xl">👋,</span>
-          </h1>
-          <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Welcome back to your dashboard.</p>
-        </div>
-        <button 
-          onClick={() => navigate('/projects')}
-          className="bg-blue-800 hover:bg-blue-900 text-white px-5 py-2.5 rounded-lg font-medium flex items-center gap-2 shadow-lg shadow-blue-800/20 transition active:scale-95"
-        >
-          New Projects <Plus size={18} className="bg-white/20 rounded-full p-0.5" />
-        </button>
-      </div>
-
-      {/* --- ROW 1: SPLIT TABLES (PROJECTS & PANELS) --- */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
+      <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 p-4 sm:p-6 lg:p-8">
         
-        {/* LEFT CARD: RECENT PROJECTS (Data Real dari mockData) */}
-        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 flex flex-col h-full">
-          <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
-            <h3 className="font-bold text-slate-800 dark:text-white text-lg">Recent Projects</h3>
-            <button onClick={() => navigate('/projects')} className="text-xs font-semibold text-blue-600 hover:underline">View All</button>
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-white">Hello Wawan 👋</h1>
+            <p className="text-slate-500 text-sm mt-1">Welcome back to your dashboard.</p>
           </div>
-          <div className="flex-1 overflow-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="text-slate-500 bg-slate-100/50 dark:bg-slate-800 dark:text-slate-400 uppercase text-xs">
-                <tr>
-                  <th className="px-5 py-3 font-semibold">Job No</th>
-                  <th className="px-5 py-3 font-semibold">Name</th>
-                  <th className="px-5 py-3 font-semibold">Customer</th>
-                  <th className="px-5 py-3"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {projectsData.slice(0, 5).map((project) => ( // Ambil 5 project teratas
-                  <tr key={project.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 group transition-colors cursor-pointer" onClick={() => navigate('/project-detail')}>
-                    <td className="px-5 py-3.5 font-medium text-slate-700 dark:text-slate-300">{project.jobNo}</td>
-                    <td className="px-5 py-3.5 font-bold text-slate-800 dark:text-white">{project.namaProject}</td>
-                    <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">{project.customer}</td>
-                    <td className="px-5 py-3.5 text-right">
-                      <ChevronRight size={16} className="text-slate-300 group-hover:text-blue-600 transition-colors"/>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <button onClick={() => navigate('/projects')}
+            className="w-full sm:w-auto bg-blue-700 hover:bg-blue-800 text-white px-5 py-2.5 rounded-lg font-medium flex items-center justify-center gap-2 shadow-lg">
+            <Plus size={18} /> New Project
+          </button>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                <Briefcase size={20} className="text-blue-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-slate-800 dark:text-white">{totalProjects}</p>
+                <p className="text-xs text-slate-500">Projects</p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                <Package size={20} className="text-green-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-slate-800 dark:text-white">{totalMaterials}</p>
+                <p className="text-xs text-slate-500">Materials</p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+                <Layers size={20} className="text-purple-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-slate-800 dark:text-white">{totalPanels}</p>
+                <p className="text-xs text-slate-500">Panels</p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 col-span-2 lg:col-span-1">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
+                <Box size={20} className="text-orange-600" />
+              </div>
+              <div>
+                <p className="text-lg font-bold text-slate-800 dark:text-white">{formatRupiah(totalProjectValue)}</p>
+                <p className="text-xs text-slate-500">Total Value</p>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* RIGHT CARD: RECENT PANELS (Sesuai Desain Gambar) */}
-        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 flex flex-col h-full">
-          <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
-            <h3 className="font-bold text-slate-800 dark:text-white text-lg">Recent Panels</h3>
-            <MoreHorizontal size={18} className="text-slate-400 cursor-pointer hover:text-slate-600"/>
-          </div>
-          <div className="flex-1 overflow-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="text-slate-500 bg-slate-100/50 dark:bg-slate-800 dark:text-slate-400 uppercase text-xs">
-                <tr>
-                  <th className="px-5 py-3 font-semibold">Nama</th>
-                  <th className="px-5 py-3 font-semibold">Spesifikasi</th>
-                  <th className="px-5 py-3 font-semibold">Harga</th>
-                  <th className="px-5 py-3 font-semibold text-center">Act</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {recentPanels.map((p) => (
-                  <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                    <td className="px-5 py-3.5 font-medium text-slate-700 dark:text-slate-300">{p.name}</td>
-                    <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">{p.spec}</td>
-                    <td className="px-5 py-3.5 text-slate-700 dark:text-slate-300 font-mono text-xs">{formatRupiah(p.price)}</td>
-                    <td className="px-5 py-3.5 text-center">
-                      <div className="w-8 h-8 rounded-full bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center text-orange-500 mx-auto cursor-pointer hover:bg-orange-100 transition-colors">
-                        <Edit2 size={14} />
-                      </div>
-                    </td>
+        {/* Tables Row */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 lg:gap-6 mb-6">
+          
+          {/* Recent Projects */}
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+            <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
+              <h3 className="font-bold text-slate-800 dark:text-white">Recent Projects</h3>
+              <button onClick={() => navigate('/projects')} className="text-xs font-semibold text-blue-600 hover:underline">View All</button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-slate-500 bg-slate-50 dark:bg-slate-800 text-xs">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-semibold">Job No</th>
+                    <th className="px-4 py-3 text-left font-semibold">Project</th>
+                    <th className="px-4 py-3 text-left font-semibold hidden sm:table-cell">Customer</th>
+                    <th className="px-4 py-3 text-right font-semibold">Value</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {projectsData.slice(0, 5).map((project) => (
+                    <tr key={project.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer" onClick={() => navigate('/project-detail')}>
+                      <td className="px-4 py-3 font-mono text-xs font-bold text-blue-600">{project.jobNo}</td>
+                      <td className="px-4 py-3 font-semibold text-slate-800 dark:text-white">{project.namaProject}</td>
+                      <td className="px-4 py-3 text-slate-500 hidden sm:table-cell">{project.customer}</td>
+                      <td className="px-4 py-3 text-right font-medium">{formatRupiah(project.harga)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-      </div>
 
-      {/* --- ROW 2: RECENT ACTIVITIES --- */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 mb-8 overflow-hidden">
-        <div className="p-5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 flex justify-between items-center">
-          <h3 className="font-bold text-slate-800 dark:text-white text-lg">Recent Activities</h3>
-          <div className="p-2 bg-white dark:bg-slate-800 rounded-full shadow-sm border border-slate-100 dark:border-slate-700">
-             <Clock size={16} className="text-slate-400"/>
-          </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {recentActivities.map((act) => (
-                <tr key={act.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                  <td className="px-6 py-4 text-slate-500 dark:text-slate-400 font-medium w-24">{act.user}</td>
-                  <td className="px-6 py-4 font-semibold text-slate-700 dark:text-slate-300 w-32">
-                    <span className={`px-2 py-1 rounded text-xs ${act.action === 'Menghapus' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
-                      {act.action}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-slate-500 dark:text-slate-400 w-32">{act.target}</td>
-                  <td className="px-6 py-4 text-slate-700 dark:text-slate-300 font-bold w-40">{act.item}</td>
-                  <td className="px-6 py-4 text-slate-500 dark:text-slate-400">{act.detail}</td>
-                  <td className="px-6 py-4 font-mono text-slate-700 dark:text-slate-300 font-medium">{act.value}</td>
-                  <td className="px-6 py-4 text-right text-slate-400 text-xs">{act.time}</td>
-                </tr>
+          {/* Recent Activities */}
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+            <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
+              <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                <Clock size={16} className="text-slate-400" /> Recent Activities
+              </h3>
+            </div>
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+              {recentActivities.map((activity) => (
+                <div key={activity.id} className="px-4 py-3 flex items-start gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${getActionColor(activity.color)}`}>
+                    {getActionIcon(activity.action)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-slate-800 dark:text-white">
+                      <span className="font-semibold">{activity.user}</span>
+                      <span className="text-slate-500"> {activity.action.toLowerCase()} </span>
+                      <span className="font-semibold">{activity.target}</span>
+                    </p>
+                    <p className="text-xs text-slate-500 mt-0.5">{activity.detail}</p>
+                  </div>
+                  <span className="text-xs text-slate-400 flex-shrink-0">{activity.time}</span>
+                </div>
               ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* --- ROW 3: STATISTICS CARDS (Modern Style) --- */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        
-        {/* CARD 1 */}
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 flex items-center gap-5 hover:shadow-md transition-shadow">
-          <div className="w-14 h-14 rounded-full bg-green-50 dark:bg-green-900/20 flex items-center justify-center text-green-600 dark:text-green-400">
-            <Users size={28} />
-          </div>
-          <div>
-            <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Total Customers</p>
-            <h3 className="text-3xl font-black text-slate-800 dark:text-white tracking-tight">5,423</h3>
-            <p className="text-green-600 text-xs font-bold mt-1 flex items-center gap-1">
-              <ArrowUpRight size={14}/> 16% <span className="text-slate-400 font-normal">this month</span>
-            </p>
+            </div>
           </div>
         </div>
 
-        {/* CARD 2 */}
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 flex items-center gap-5 hover:shadow-md transition-shadow">
-          <div className="w-14 h-14 rounded-full bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
-            <UserCheck size={28} />
+        {/* Product Panels & Materials */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 lg:gap-6">
+          
+          {/* Product Panels */}
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+            <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
+              <h3 className="font-bold text-slate-800 dark:text-white">Product Panels</h3>
+              <button onClick={() => navigate('/product')} className="text-xs font-semibold text-blue-600 hover:underline">View All</button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-slate-500 bg-slate-50 dark:bg-slate-800 text-xs">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-semibold">Panel Name</th>
+                    <th className="px-4 py-3 text-center font-semibold">Items</th>
+                    <th className="px-4 py-3 text-right font-semibold">Base Price</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {masterPanels.map((panel) => (
+                    <tr key={panel.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer" onClick={() => navigate('/product')}>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+                            <Layers size={16} className="text-purple-600" />
+                          </div>
+                          <span className="font-semibold text-slate-800 dark:text-white">{panel.name}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded text-xs font-medium">{panel.defaultMaterials.length}</span>
+                      </td>
+                      <td className="px-4 py-3 text-right font-medium">{formatRupiah(panel.price)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-          <div>
-            <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Members</p>
-            <h3 className="text-3xl font-black text-slate-800 dark:text-white tracking-tight">1,893</h3>
-            <p className="text-red-500 text-xs font-bold mt-1 flex items-center gap-1">
-              <ArrowDownRight size={14}/> 1% <span className="text-slate-400 font-normal">this month</span>
-            </p>
-          </div>
-        </div>
 
-        {/* CARD 3 */}
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 flex items-center gap-5 hover:shadow-md transition-shadow">
-          <div className="w-14 h-14 rounded-full bg-green-50 dark:bg-green-900/20 flex items-center justify-center text-green-600 dark:text-green-400">
-            <Monitor size={28} />
-          </div>
-          <div>
-            <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Active Now</p>
-            <h3 className="text-3xl font-black text-slate-800 dark:text-white mb-2 tracking-tight">189</h3>
-            <div className="flex -space-x-2">
-               {[1,2,3,4].map(i => (
-                 <img key={i} className="w-6 h-6 rounded-full border-2 border-white dark:border-slate-800" src={`https://i.pravatar.cc/150?img=${i+12}`} alt="user"/>
-               ))}
-               <div className="w-6 h-6 rounded-full border-2 border-white dark:border-slate-800 bg-slate-100 text-[10px] flex items-center justify-center font-bold text-slate-500">+5</div>
+          {/* Materials */}
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+            <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
+              <h3 className="font-bold text-slate-800 dark:text-white">Material Database</h3>
+              <button onClick={() => navigate('/material')} className="text-xs font-semibold text-blue-600 hover:underline">View All</button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-slate-500 bg-slate-50 dark:bg-slate-800 text-xs">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-semibold">Item</th>
+                    <th className="px-4 py-3 text-left font-semibold">Brand</th>
+                    <th className="px-4 py-3 text-right font-semibold">Price</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {masterComponents.map((mat) => (
+                    <tr key={mat.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer" onClick={() => navigate('/material')}>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                            <Package size={16} className="text-blue-600" />
+                          </div>
+                          <span className="font-semibold text-slate-800 dark:text-white">{mat.item}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{mat.brand}</td>
+                      <td className="px-4 py-3 text-right font-medium">
+                        {mat.currency === 'USD' && mat.internationalPrice > 0 ? `$${mat.internationalPrice}` : formatRupiah(mat.localPrice)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
 
       </div>
-
     </div>
   );
 };

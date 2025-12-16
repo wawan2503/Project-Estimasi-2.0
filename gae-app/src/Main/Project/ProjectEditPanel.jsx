@@ -4,6 +4,7 @@ import {
   ArrowLeft, Plus, Trash2, Save, Search, Filter, X
 } from 'lucide-react';
 import { projectsData, masterComponents, formatRupiah, formatUSD } from '../../data/mockData';
+import MobileHeader from '../../components/MobileHeader';
 
 // --- STYLE SCROLLBAR ---
 const scrollContainerStyle = {
@@ -49,7 +50,7 @@ const ColumnFilter = ({ label, field, currentFilter, onFilterChange, bgColor = "
   );
 };
 
-const ProjectEditPanel = () => {
+const ProjectEditPanel = ({ setSidebarOpen }) => {
   const { panelId } = useParams();
   const navigate = useNavigate();
   const KURS_USD = 16000; 
@@ -161,18 +162,19 @@ const ProjectEditPanel = () => {
 
   return (
     <div className="flex flex-col h-screen bg-slate-50 dark:bg-slate-950 font-sans text-slate-800 dark:text-slate-200 overflow-hidden">
+      <MobileHeader setSidebarOpen={setSidebarOpen} title="Edit Panel" />
       
       {/* HEADER PAGE */}
-      <div className="flex-none px-6 py-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center shadow-sm z-30">
-        <div className="flex items-center gap-4">
-          <button onClick={() => navigate(-1)} className="p-1.5 hover:bg-slate-100 rounded-lg"><ArrowLeft size={18}/></button>
+      <div className="flex-none px-4 sm:px-6 py-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-sm z-30">
+        <div className="flex items-center gap-4 min-w-0 flex-1">
+          <button onClick={() => navigate(-1)} className="p-1.5 hover:bg-slate-100 rounded-lg flex-shrink-0"><ArrowLeft size={18}/></button>
           
-          <div className="flex flex-col">
-            <div className="flex items-center gap-3">
-                <h1 className="text-lg font-bold">Edit: <span className="text-blue-600">{panelData.jenis}</span></h1>
+          <div className="flex flex-col min-w-0 flex-1">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                <h1 className="text-base lg:text-lg font-bold truncate">Edit: <span className="text-blue-600">{panelData.jenis}</span></h1>
                 
                 {/* Panel Quantity Input */}
-                <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded px-2 py-0.5 border border-slate-200 dark:border-slate-700">
+                <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded px-2 py-0.5 border border-slate-200 dark:border-slate-700 self-start">
                     <span className="text-xs font-semibold mr-2 text-slate-500">Qty Panel:</span>
                     <input 
                         type="number" 
@@ -186,7 +188,7 @@ const ProjectEditPanel = () => {
             <p className="text-xs text-slate-500 mt-0.5">Kurs: {formatRupiah(KURS_USD)}</p>
           </div>
         </div>
-        <button onClick={handleSave} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold text-sm flex gap-2 items-center shadow-md"><Save size={16}/> Simpan</button>
+        <button onClick={handleSave} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold text-sm flex gap-2 items-center justify-center shadow-md"><Save size={16}/> Simpan</button>
       </div>
 
       {/* MAIN SCROLL CONTAINER */}
