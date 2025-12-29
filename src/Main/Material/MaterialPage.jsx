@@ -1,15 +1,20 @@
-import React, { useState } from 'react';
-import { Search, Plus, Edit2, Trash2, Package, Wrench, X, Filter, Save, FileSpreadsheet } from 'lucide-react';
+ import React, { useState, useMemo, useEffect } from 'react';
+import { Plus, Package, X, Save, FileSpreadsheet, LayoutGrid, Table, Edit2, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { masterComponents, formatRupiah, formatUSD } from '../../data/mockData';
 import MobileHeader from '../../components/MobileHeader';
+import TableViewMaterial from './TableViewMaterial';
+import CardViewMaterial from './CardViewMaterial';
 import * as XLSX from 'xlsx-js-style';
+
+const ITEMS_PER_PAGE = 50;
 
 const MaterialPage = ({ setSidebarOpen }) => {
   const [materials, setMaterials] = useState(masterComponents);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState(null);
-  const [filters, setFilters] = useState({ item: '', brand: '', specs: '', price: '', vendor: '' });
-  const [activeFilter, setActiveFilter] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [viewMode, setViewMode] = useState('card');
+  const [currentPage, setCurrentPage] = useState(1);
   
   const emptyForm = {
     item: '', brand: '', series: '', pole: '', ka: '', ampere: '',
@@ -17,10 +22,6 @@ const MaterialPage = ({ setSidebarOpen }) => {
     currency: 'IDR', manHour: 0, vendor: ''
   };
   const [formData, setFormData] = useState(emptyForm);
-
-  const handleFilter = (column, value) => setFilters(prev => ({ ...prev, [column]: value }));
-  const toggleFilter = (column) => setActiveFilter(activeFilter === column ? null : column);
-  const clearFilter = (column) => { handleFilter(column, ''); setActiveFilter(null); };
 
   const openAddModal = () => { setEditingMaterial(null); setFormData(emptyForm); setIsModalOpen(true); };
   const openEditModal = (material) => { setEditingMaterial(material); setFormData({ ...material }); setIsModalOpen(true); };
@@ -53,20 +54,26 @@ const MaterialPage = ({ setSidebarOpen }) => {
     }
   };
 
-  const formatPrice = (material) => {
-    if (material.currency === 'USD' && material.internationalPrice > 0) {
-      return formatUSD(material.internationalPrice);
-    }
-    return formatRupiah(material.localPrice);
-  };
+  const filteredMaterials = useMemo(() => {
+    const search = searchTerm.toLowerCase();
+    return materials.filter(m =>
+      m.item.toLowerCase().includes(search) ||
+      m.brand.toLowerCase().includes(search) ||
+      m.detail.toLowerCase().includes(search) ||
+      m.series?.toLowerCase().includes(search) ||
+      m.vendor.toLowerCase().includes(search)
+    );
+  }, [materials, searchTerm]);
 
-  const filteredMaterials = materials.filter(material => 
-    material.item.toLowerCase().includes(filters.item.toLowerCase()) &&
-    material.brand.toLowerCase().includes(filters.brand.toLowerCase()) &&
-    material.detail.toLowerCase().includes(filters.specs.toLowerCase()) &&
-    formatPrice(material).toLowerCase().includes(filters.price.toLowerCase()) &&
-    material.vendor.toLowerCase().includes(filters.vendor.toLowerCase())
-  );
+  // Pagination
+  const totalPages = Math.ceil(filteredMaterials.length / ITEMS_PER_PAGE);
+  const paginatedMaterials = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredMaterials.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredMaterials, currentPage]);
+
+  // Reset page when search changes
+  useEffect(() => { setCurrentPage(1); }, [searchTerm]);
 
   // Export to Excel
   const exportToExcel = () => {
@@ -192,41 +199,6 @@ const MaterialPage = ({ setSidebarOpen }) => {
     XLSX.writeFile(wb, `Material_Database_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
-  const FilterHeader = ({ label, column }) => {
-    const isActive = activeFilter === column;
-    const hasValue = filters[column] !== '';
-    
-    return (
-      <th className="px-4 py-3 text-left bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-400">{label}</span>
-          <button onClick={() => toggleFilter(column)}
-            className={`relative p-1.5 rounded-md transition-all ${
-              isActive ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400' 
-                : hasValue ? 'bg-green-100 text-green-600 dark:bg-green-900/50 dark:text-green-400'
-                : 'hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400'
-            }`}>
-            <Filter size={14} />
-            {hasValue && !isActive && <span className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full"></span>}
-          </button>
-        </div>
-        {isActive && (
-          <div className="mt-2 relative">
-            <input type="text" placeholder={`Filter ${label.toLowerCase()}...`} value={filters[column]}
-              onChange={(e) => handleFilter(column, e.target.value)} autoFocus
-              className="w-full pl-8 pr-8 py-2 text-sm rounded-lg border border-blue-300 dark:border-blue-600 bg-white dark:bg-slate-900 outline-none ring-2 ring-blue-100 dark:ring-blue-900/50" />
-            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-blue-400" />
-            {filters[column] && (
-              <button onClick={() => clearFilter(column)} className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-full bg-slate-200 hover:bg-red-100 hover:text-red-500">
-                <X size={12} />
-              </button>
-            )}
-          </div>
-        )}
-      </th>
-    );
-  };
-
   return (
     <div className="flex-1 flex flex-col h-screen overflow-hidden">
       <MobileHeader setSidebarOpen={setSidebarOpen} title="Materials" />
@@ -241,94 +213,99 @@ const MaterialPage = ({ setSidebarOpen }) => {
               </h1>
               <p className="text-slate-500 text-sm mt-1">{filteredMaterials.length} of {materials.length} materials</p>
             </div>
-            <div className="flex gap-2 w-full sm:w-auto">
+            <div className="flex gap-2 w-full sm:w-auto flex-wrap">
+              {/* Search */}
+              <div className="relative flex-1 sm:w-[200px]">
+                <input 
+                  type="text" 
+                  placeholder="Search..." 
+                  value={searchTerm} 
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-sm outline-none focus:ring-2 focus:ring-blue-500/20" 
+                />
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              </div>
+              {/* View Toggle */}
+              <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
+                <button onClick={() => setViewMode('card')} className={`p-2 rounded-md transition-all ${viewMode === 'card' ? 'bg-white dark:bg-slate-700 shadow text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}>
+                  <LayoutGrid size={18} />
+                </button>
+                <button onClick={() => setViewMode('table')} className={`p-2 rounded-md transition-all ${viewMode === 'table' ? 'bg-white dark:bg-slate-700 shadow text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}>
+                  <Table size={18} />
+                </button>
+              </div>
               <button onClick={exportToExcel}
-                className="flex-1 sm:flex-initial bg-green-600 hover:bg-green-700 text-white px-4 py-2.5 rounded-lg font-semibold shadow flex items-center justify-center gap-2">
-                <FileSpreadsheet size={18} /> Export Excel
+                className="bg-green-600 hover:bg-green-700 text-white px-3 py-2.5 rounded-lg font-semibold shadow flex items-center justify-center gap-2">
+                <FileSpreadsheet size={18} />
               </button>
               <button onClick={openAddModal}
-                className="flex-1 sm:flex-initial bg-blue-700 hover:bg-blue-800 text-white px-4 py-2.5 rounded-lg font-semibold shadow flex items-center justify-center gap-2">
-                <Plus size={18} /> Add Material
+                className="bg-blue-700 hover:bg-blue-800 text-white px-3 py-2.5 rounded-lg font-semibold shadow flex items-center justify-center gap-2">
+                <Plus size={18} />
               </button>
             </div>
           </div>
         </div>
 
-        {/* Table */}
+        {/* Content */}
         <div className="px-4 sm:px-6 lg:px-8 max-w-[1400px] mx-auto py-6">
-          <div className="rounded-xl shadow-sm overflow-hidden bg-white border border-slate-200 dark:bg-slate-900 dark:border-slate-800">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px]">
-                <thead>
-                  <tr>
-                    <FilterHeader label="Item" column="item" />
-                    <FilterHeader label="Brand" column="brand" />
-                    <FilterHeader label="Specifications" column="specs" />
-                    <FilterHeader label="Price" column="price" />
-                    <FilterHeader label="Vendor" column="vendor" />
-                    <th className="px-4 py-3 text-center bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
-                      <span className="text-xs font-bold uppercase text-slate-600 dark:text-slate-400">Actions</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {filteredMaterials.length === 0 ? (
-                    <tr>
-                      <td colSpan="6" className="px-6 py-16 text-center">
-                        <Package size={32} className="mx-auto text-slate-400 mb-2" />
-                        <p className="text-slate-500 font-medium">No materials found</p>
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredMaterials.map((material) => (
-                      <tr key={material.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
-                              <Package size={18} className="text-blue-600" />
-                            </div>
-                            <div>
-                              <div className="font-semibold text-slate-800 dark:text-slate-200">{material.item}</div>
-                              <div className="text-xs text-slate-500">{material.unit}</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="font-medium text-slate-700 dark:text-slate-300">{material.brand}</div>
-                          <div className="text-xs text-slate-500">{material.series}</div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="text-sm text-slate-600 dark:text-slate-400">{material.detail}</div>
-                          <div className="flex gap-1.5 mt-1">
-                            {material.pole && material.pole !== '-' && <span className="px-1.5 py-0.5 bg-green-100 text-green-700 text-xs rounded">{material.pole}</span>}
-                            {material.ampere && <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-xs rounded">{material.ampere}A</span>}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="font-semibold text-slate-800 dark:text-slate-200">{formatPrice(material)}</div>
-                          <div className="flex items-center gap-1 mt-0.5">
-                            <Wrench size={11} className="text-slate-400" />
-                            <span className="text-xs text-slate-500">{formatRupiah(material.manHour)}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{material.vendor}</td>
-                        <td className="px-4 py-3 text-center">
-                          <div className="flex justify-center gap-1">
-                            <button onClick={() => openEditModal(material)} className="p-1.5 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50">
-                              <Edit2 size={15}/>
-                            </button>
-                            <button onClick={() => handleDelete(material.id)} className="p-1.5 rounded text-slate-400 hover:text-red-600 hover:bg-red-50">
-                              <Trash2 size={15}/>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+          
+          {/* Card View */}
+          {viewMode === 'card' && (
+            <CardViewMaterial 
+              materials={paginatedMaterials} 
+              onEdit={openEditModal} 
+              onDelete={handleDelete} 
+            />
+          )}
+
+          {/* Table View */}
+          {viewMode === 'table' && (
+            <TableViewMaterial 
+              materials={paginatedMaterials} 
+              onEdit={openEditModal} 
+              onDelete={handleDelete}
+              onAdd={(newMaterial) => setMaterials([...materials, newMaterial])}
+            />
+          )}
+
+          {/* Shared Pagination */}
+          {filteredMaterials.length > 0 && (
+            <div className="mt-4 flex items-center justify-between bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 px-4 py-3">
+              <span className="text-xs text-slate-500">
+                Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1}-{Math.min(currentPage * ITEMS_PER_PAGE, filteredMaterials.length)} of {filteredMaterials.length}
+              </span>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))} 
+                  disabled={currentPage === 1} 
+                  className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <ChevronLeft size={14}/> Prev
+                </button>
+                <div className="flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                  <input 
+                    type="number" 
+                    min="1" 
+                    max={totalPages}
+                    value={currentPage}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value) || 1;
+                      setCurrentPage(Math.min(Math.max(1, val), totalPages));
+                    }}
+                    className="w-10 text-center text-xs font-bold bg-transparent text-blue-700 dark:text-blue-300 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                  <span className="text-xs font-bold text-blue-700 dark:text-blue-300">/ {totalPages}</span>
+                </div>
+                <button 
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} 
+                  disabled={currentPage === totalPages} 
+                  className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Next <ChevronRight size={14}/>
+                </button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 

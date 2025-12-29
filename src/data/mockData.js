@@ -1,5 +1,5 @@
 // --- 1. KONSTANTA & HELPER ---
-export const GAE_LOGO_URL = "https://i.ibb.co/PzMQJ7b/gae-logo.png";
+export const GAE_LOGO_URL = "/src/assets/Logo/LOGO GAE wawan.jpg.png";
 export const KURS_USD = 16000;
 
 export const formatRupiah = (angka) => {
