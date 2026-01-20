@@ -128,6 +128,7 @@ const ProjectPage = ({ setSidebarOpen }) => {
                     {['Job No', 'Project Name', 'Customer', 'Total Value', 'Creator', 'Last Update', ''].map((head) => (
                       <th key={head} className="px-4 lg:px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-blue-800 dark:text-blue-400">
                         {head}
+
                       </th>
                     ))}
                   </tr>
@@ -203,7 +204,7 @@ const ProjectPage = ({ setSidebarOpen }) => {
             <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4">
               <div className="space-y-1.5">
                 <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2">
-                  <Hash size={16} className="text-blue-500"/> Job No <span className="text-red-500">*</span>
+                  <Hash size={16} className="text-blue-500"/> Wawan <span className="text-red-500">*</span>
                 </label>
                 <input 
                   type="text" name="jobNo" required 
