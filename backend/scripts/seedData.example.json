@@ -1,0 +1,68 @@
+{
+  "customers": [
+    {
+      "name": "PT Contoh Customer",
+      "contact": "Budi",
+      "phone": "021-000000",
+      "email": "budi@example.com",
+      "address": "Jakarta",
+      "type": "Corporate"
+    }
+  ],
+  "materials": [
+    {
+      "legacyId": "c1",
+      "item": "MCCB",
+      "brand": "Schneider",
+      "series": "NSX",
+      "pole": "1P",
+      "ka": "10",
+      "ampere": "50-70",
+      "detail": "MCCB,1P,10KA,50-70A",
+      "unit": "UNIT",
+      "internationalPrice": 0,
+      "localPrice": 500000,
+      "currency": "IDR",
+      "manHour": 18000,
+      "vendor": "Graha El"
+    }
+  ],
+  "productPanels": [
+    {
+      "legacyId": "mp1",
+      "name": "PHB TM OUTGOING",
+      "price": 100000000,
+      "defaultMaterials": [
+        {
+          "item": "MCCB",
+          "brand": "Schneider",
+          "series": "NSX",
+          "detail": "MCCB,1P,10KA,50-70A",
+          "unit": "UNIT",
+          "qty": 1,
+          "factor": 1,
+          "diskon": 10,
+          "localPrice": 500000,
+          "internationalPrice": 0,
+          "currency": "IDR",
+          "manHour": 18000,
+          "vendor": "Graha El"
+        }
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "jobNo": "E6-2117",
+      "namaProject": "Ehouse",
+      "customer": "Freeport",
+      "pembuat": "Irwansyah Sarumaha",
+      "additionalCosts": {
+        "packing": 0,
+        "shipping": 0
+      },
+      "details": []
+    }
+  ]
+}
+
