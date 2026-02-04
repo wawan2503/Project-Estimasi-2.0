@@ -17,16 +17,16 @@ const ProjectWord = ({ projectInfo, panels }) => {
     const locPrice = parseFloat(item.localPrice) || 0;
 
     let priceAfterDiscUSD = 0;
-    if (intPrice > 0) priceAfterDiscUSD = intPrice * factor * ((100 - diskon) / 100);
+    if (intPrice > 0) priceAfterDiscUSD = (intPrice * ((100 - diskon) / 100)) / factor;
 
     let priceBecomeIDR = 0;
     if (priceAfterDiscUSD > 0) priceBecomeIDR = priceAfterDiscUSD * KURS_USD;
 
     let priceAfterDiscIDR = 0;
-    if (locPrice > 0) priceAfterDiscIDR = locPrice * factor * ((100 - diskon) / 100);
+    const sumPriceIDR = locPrice + (intPrice > 0 ? intPrice * KURS_USD : 0);
+    if (sumPriceIDR > 0) priceAfterDiscIDR = (sumPriceIDR * ((100 - diskon) / 100)) / factor;
 
-    const basePriceIDR = priceBecomeIDR > 0 ? priceBecomeIDR : priceAfterDiscIDR;
-    const priceAfterManHour = basePriceIDR + manHour;
+    const priceAfterManHour = priceAfterDiscIDR + manHour / factor;
     const totalPrice = priceAfterManHour * qty;
 
     return { priceAfterDiscUSD, priceBecomeIDR, priceAfterDiscIDR, priceAfterManHour, totalPrice };

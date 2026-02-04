@@ -18,11 +18,10 @@ export const calculateMaterialPrice = (item) => {
   const intPrice = parseFloat(item.internationalPrice) || 0;
   const locPrice = parseFloat(item.localPrice) || 0;
 
-  const priceAfterDiscUSD = intPrice > 0 ? intPrice * factor * ((100 - diskon) / 100) : 0;
-  const priceBecomeIDR = priceAfterDiscUSD > 0 ? priceAfterDiscUSD * KURS_USD : 0;
-  const priceAfterDiscIDR = locPrice > 0 ? locPrice * factor * ((100 - diskon) / 100) : 0;
-  const basePriceIDR = priceBecomeIDR > 0 ? priceBecomeIDR : priceAfterDiscIDR;
-  return (basePriceIDR + manHour) * qty;
+  const discRate = (100 - diskon) / 100;
+  const sumPriceIDR = locPrice + (intPrice > 0 ? intPrice * KURS_USD : 0);
+  const priceAfterDiscIDR = sumPriceIDR > 0 ? (sumPriceIDR * discRate) / factor : 0;
+  return (priceAfterDiscIDR + manHour / factor) * qty;
 };
 
 export const calculatePanelTotal = (panel) => {
@@ -38,4 +37,3 @@ export const calculateProjectTotal = (project) => {
   const additionalTotal = Object.values(additionalCosts).reduce((sum, cost) => sum + (parseFloat(cost) || 0), 0);
   return panelsTotal + additionalTotal;
 };
-

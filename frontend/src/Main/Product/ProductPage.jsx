@@ -85,11 +85,14 @@ const ProductPage = ({ setSidebarOpen }) => {
     const disc = mat.diskon || 0;
     const factor = mat.factor || 1;
     const qty = mat.qty || 1;
-    const priceAfterDiscUSD = (mat.internationalPrice || 0) * (1 - disc / 100) * factor;
+    const discRate = 1 - disc / 100;
+    const intPrice = mat.internationalPrice || 0;
+    const locPrice = mat.localPrice || 0;
+    const priceAfterDiscUSD = intPrice > 0 ? (intPrice * discRate) / factor : 0;
     const priceBecomeIDR = priceAfterDiscUSD * KURS_USD;
-    const priceAfterDiscIDR = (mat.localPrice || 0) * (1 - disc / 100) * factor;
-    const basePrice = priceBecomeIDR > 0 ? priceBecomeIDR : priceAfterDiscIDR;
-    const priceAfterManHour = basePrice + (mat.manHour || 0);
+    const sumPriceIDR = locPrice + (intPrice > 0 ? intPrice * KURS_USD : 0);
+    const priceAfterDiscIDR = sumPriceIDR > 0 ? (sumPriceIDR * discRate) / factor : 0;
+    const priceAfterManHour = priceAfterDiscIDR + (mat.manHour || 0) / factor;
     const totalPrice = priceAfterManHour * qty;
     return { priceAfterDiscUSD, priceBecomeIDR, priceAfterDiscIDR, priceAfterManHour, totalPrice };
   };
@@ -239,4 +242,3 @@ const ProductPage = ({ setSidebarOpen }) => {
 };
 
 export default ProductPage;
-

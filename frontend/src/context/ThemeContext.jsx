@@ -1,6 +1,5 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-
-const ThemeContext = createContext();
+import React, { useEffect, useState } from 'react';
+import { ThemeContext } from './ThemeContextStore';
 
 export const ThemeProvider = ({ children }) => {
   // Cek localStorage atau preferensi sistem saat pertama kali load
@@ -30,5 +29,3 @@ export const ThemeProvider = ({ children }) => {
     </ThemeContext.Provider>
   );
 };
-
-export const useTheme = () => useContext(ThemeContext);

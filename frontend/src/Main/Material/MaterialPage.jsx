@@ -1,11 +1,25 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { Plus, Package, X, Save, FileSpreadsheet, LayoutGrid, Table, Edit2, Search, ChevronLeft, ChevronRight } from 'lucide-react';
-import { formatRupiah, formatUSD } from '../../data/mockData';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import {
+  Plus,
+  Package,
+  X,
+  Save,
+  FileSpreadsheet,
+  LayoutGrid,
+  Table,
+  Edit2,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  Upload,
+  Download
+} from 'lucide-react';
 import MobileHeader from '../../components/MobileHeader';
 import TableViewMaterial from './TableViewMaterial';
 import CardViewMaterial from './CardViewMaterial';
 import * as XLSX from 'xlsx-js-style';
 import { api } from '../../lib/api';
+import { downloadMaterialsTemplate, parseMaterialsArrayBuffer } from '../../lib/materialsExcel';
 
 const ITEMS_PER_PAGE = 50;
 
@@ -17,6 +31,8 @@ const MaterialPage = ({ setSidebarOpen }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState('table');
   const [currentPage, setCurrentPage] = useState(1);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef(null);
   
   const emptyForm = {
     item: '', brand: '', series: '', pole: '', ka: '', ampere: '',
@@ -28,8 +44,24 @@ const MaterialPage = ({ setSidebarOpen }) => {
   const loadMaterials = async () => {
     setLoading(true);
     try {
-      const res = await api.get(`/api/materials?limit=500&offset=0`);
-      setMaterials(res.data || []);
+      const limit = 500;
+      const all = [];
+      let offset = 0;
+      let total = null;
+
+      for (let page = 0; page < 50; page++) {
+        const res = await api.get(`/api/materials?limit=${limit}&offset=${offset}`);
+        const batch = res.data || [];
+        total = typeof res.count === 'number' ? res.count : total;
+
+        all.push(...batch);
+        offset += batch.length;
+
+        if (batch.length < limit) break;
+        if (total != null && offset >= total) break;
+      }
+
+      setMaterials(all);
     } finally {
       setLoading(false);
     }
@@ -50,11 +82,13 @@ const MaterialPage = ({ setSidebarOpen }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    const localPrice = parseFloat(formData.localPrice) || 0;
+    const computedManHour = Math.round(localPrice * 0.02);
     const materialData = {
       ...formData,
       internationalPrice: parseFloat(formData.internationalPrice) || 0,
-      localPrice: parseFloat(formData.localPrice) || 0,
-      manHour: parseFloat(formData.manHour) || 0
+      localPrice,
+      manHour: computedManHour
     };
 
     (async () => {
@@ -77,6 +111,59 @@ const MaterialPage = ({ setSidebarOpen }) => {
         .delete(`/api/materials/${id}`)
         .then(() => setMaterials((prev) => prev.filter((m) => m.id !== id)))
         .catch((err) => alert(err.message));
+    }
+  };
+
+  const downloadImportTemplate = () => {
+    downloadMaterialsTemplate();
+  };
+
+  const openImportDialog = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleImportFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const { items, errors } = parseMaterialsArrayBuffer(arrayBuffer);
+
+      if (!items.length) {
+        alert(errors?.length ? errors.join('\n') : 'No materials found in the file.');
+        return;
+      }
+
+      const proceed = confirm(
+        [
+          `File: ${file.name}`,
+          `Valid rows: ${items.length}`,
+          errors?.length ? `Skipped rows: ${errors.length}` : null,
+          '',
+          'Continue import?'
+        ]
+          .filter(Boolean)
+          .join('\n')
+      );
+
+      if (!proceed) return;
+
+      setImporting(true);
+
+      const chunkSize = 200;
+      for (let i = 0; i < items.length; i += chunkSize) {
+        const chunk = items.slice(i, i + chunkSize);
+        await api.post('/api/materials/bulk', { items: chunk });
+      }
+
+      await loadMaterials();
+      alert(`Import completed: ${items.length} materials${errors?.length ? ` (skipped ${errors.length} rows)` : ''}.`);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -151,7 +238,7 @@ const MaterialPage = ({ setSidebarOpen }) => {
       m.currency,
       m.localPrice,
       m.internationalPrice,
-      m.manHour,
+      m.manHour ?? Math.round((m.localPrice || 0) * 0.02),
       m.vendor
     ]);
 
@@ -242,6 +329,13 @@ const MaterialPage = ({ setSidebarOpen }) => {
               </p>
             </div>
             <div className="flex gap-2 w-full sm:w-auto flex-wrap">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                className="hidden"
+                onChange={handleImportFile}
+              />
               {/* Search */}
               <div className="relative flex-1 sm:w-[200px]">
                 <input 
@@ -262,8 +356,28 @@ const MaterialPage = ({ setSidebarOpen }) => {
                   <Table size={18} />
                 </button>
               </div>
-              <button onClick={exportToExcel}
-                className="bg-green-600 hover:bg-green-700 text-white px-3 py-2.5 rounded-lg font-semibold shadow flex items-center justify-center gap-2">
+              <button
+                onClick={downloadImportTemplate}
+                title="Download Import Template"
+                className="bg-slate-700 hover:bg-slate-800 text-white px-3 py-2.5 rounded-lg font-semibold shadow flex items-center justify-center gap-2"
+              >
+                <Download size={18} />
+              </button>
+              <button
+                onClick={openImportDialog}
+                title="Import from Excel"
+                disabled={importing}
+                className={`bg-amber-600 hover:bg-amber-700 text-white px-3 py-2.5 rounded-lg font-semibold shadow flex items-center justify-center gap-2 ${
+                  importing ? 'opacity-60 cursor-not-allowed' : ''
+                }`}
+              >
+                <Upload size={18} />
+              </button>
+              <button
+                onClick={exportToExcel}
+                title="Export to Excel"
+                className="bg-green-600 hover:bg-green-700 text-white px-3 py-2.5 rounded-lg font-semibold shadow flex items-center justify-center gap-2"
+              >
                 <FileSpreadsheet size={18} />
               </button>
               <button onClick={openAddModal}
@@ -293,6 +407,8 @@ const MaterialPage = ({ setSidebarOpen }) => {
               onEdit={openEditModal} 
               onDelete={handleDelete}
               onAdd={(newMaterial) => {
+                const localPrice = parseFloat(newMaterial.localPrice) || 0;
+                const computedManHour = Math.round(localPrice * 0.02);
                 const payload = {
                   item: newMaterial.item,
                   brand: newMaterial.brand,
@@ -303,9 +419,9 @@ const MaterialPage = ({ setSidebarOpen }) => {
                   detail: newMaterial.detail,
                   unit: newMaterial.unit,
                   internationalPrice: parseFloat(newMaterial.internationalPrice) || 0,
-                  localPrice: parseFloat(newMaterial.localPrice) || 0,
+                  localPrice,
                   currency: newMaterial.currency || 'IDR',
-                  manHour: parseFloat(newMaterial.manHour) || 0,
+                  manHour: computedManHour,
                   vendor: newMaterial.vendor
                 };
                 api
@@ -439,8 +555,14 @@ const MaterialPage = ({ setSidebarOpen }) => {
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Man Hour Cost</label>
-                  <input type="number" name="manHour" value={formData.manHour} onChange={handleInputChange}
-                    placeholder="0" className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-950 outline-none focus:ring-2 focus:ring-blue-500" />
+                  <input
+                    type="number"
+                    name="manHour"
+                    value={Math.round(((parseFloat(formData.localPrice) || 0) * 0.02))}
+                    readOnly
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-200 outline-none"
+                  />
+                  <p className="text-[11px] mt-1 text-slate-500">Auto: 2% × Local Price</p>
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Vendor *</label>

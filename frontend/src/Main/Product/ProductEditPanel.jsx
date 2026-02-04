@@ -110,7 +110,7 @@ export const SearchableSelect = ({ value, options = [], onChange, placeholder = 
   );
 };
 
-export const MobileItemCard = ({ item, calc, getDropdownOptions, handleChange, handleDeleteRow, formatRupiah, SearchableSelect }) => {
+export const MobileItemCard = ({ item, calc, getDropdownOptions, handleChange, handleDeleteRow, formatRupiah }) => {
   const [expanded, setExpanded] = useState(false);
   return (
     <div className="bg-white dark:bg-slate-800 rounded-lg border mb-3">
@@ -235,11 +235,18 @@ const ProductEditPanel = ({ setSidebarOpen }) => {
     const manHour = parseFloat(item.manHour) || 0;
     const intPrice = parseFloat(item.internationalPrice) || 0;
     const locPrice = parseFloat(item.localPrice) || 0;
-    const pDiscUSD = intPrice > 0 ? intPrice * factor * ((100 - diskon) / 100) : 0;
+    const discRate = (100 - diskon) / 100;
+    const pDiscUSD = intPrice > 0 ? (intPrice * discRate) / factor : 0;
     const pIDR = pDiscUSD > 0 ? pDiscUSD * KURS_USD : 0;
-    const pDiscIDR = locPrice > 0 ? locPrice * factor * ((100 - diskon) / 100) : 0;
-    const baseP = pIDR > 0 ? pIDR : pDiscIDR;
-    return { priceAfterDiscUSD: pDiscUSD, priceBecomeIDR: pIDR, priceAfterDiscIDR: pDiscIDR, priceAfterManHour: baseP + manHour, totalPrice: (baseP + manHour) * qty };
+    const sumPriceIDR = locPrice + (intPrice > 0 ? intPrice * KURS_USD : 0);
+    const pDiscIDR = sumPriceIDR > 0 ? (sumPriceIDR * discRate) / factor : 0;
+    return {
+      priceAfterDiscUSD: pDiscUSD,
+      priceBecomeIDR: pIDR,
+      priceAfterDiscIDR: pDiscIDR,
+      priceAfterManHour: pDiscIDR + manHour / factor,
+      totalPrice: (pDiscIDR + manHour / factor) * qty
+    };
   };
 
   const getDropdownOptions = (row, field) => {
@@ -502,7 +509,7 @@ const ProductEditPanel = ({ setSidebarOpen }) => {
                   </caption>
                 )}
                 <tbody className="divide-y bg-white">
-                  {filteredItems.map((item, idx) => {
+                  {filteredItems.map((item) => {
                     const calc = calculateRow(item);
                     return (
                       <tr key={item.id} className="hover:bg-blue-50">
@@ -569,7 +576,9 @@ const ProductEditPanel = ({ setSidebarOpen }) => {
                         <td className="p-1 border-r whitespace-nowrap text-right text-xs font-mono">{calc.priceAfterDiscUSD > 0 ? formatUSD(calc.priceAfterDiscUSD) : '-'}</td>
                         <td className="p-1 border-r whitespace-nowrap text-right text-xs font-mono">{calc.priceBecomeIDR > 0 ? formatRupiah(calc.priceBecomeIDR) : '-'}</td>
                         <td className="p-1 border-r whitespace-nowrap text-right text-xs font-mono">{calc.priceAfterDiscIDR > 0 ? formatRupiah(calc.priceAfterDiscIDR) : '-'}</td>
-                        <td className="p-1 border-r whitespace-nowrap text-right text-xs font-mono">{formatRupiah(calc.priceAfterManHour)}</td>
+                        <td className="p-1 border-r whitespace-nowrap text-right text-xs font-mono">
+                          {formatRupiah((parseFloat(item.manHour) || 0) / (parseFloat(item.factor) || 1))}
+                        </td>
                         <td className="p-1 whitespace-nowrap text-right text-xs font-mono font-bold text-purple-800 bg-purple-50">{formatRupiah(calc.totalPrice)}</td>
                       </tr>
                     );
@@ -593,4 +602,3 @@ const ProductEditPanel = ({ setSidebarOpen }) => {
 };
 
 export default ProductEditPanel;
-

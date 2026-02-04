@@ -4,7 +4,7 @@ import { ChevronLeft, Plus, Trash2, FileEdit, X, Save } from 'lucide-react';
 import MobileHeader from '../../components/MobileHeader';
 import ProjectExcel from '../../Pages/ProjectExcel';
 import ProjectWord from '../../Pages/ProjectWord';
-import { formatRupiah, formatUSD, KURS_USD } from '../../data/mockData';
+import { formatRupiah, KURS_USD } from '../../data/mockData';
 import { api } from '../../lib/api';
 
 const DEFAULT_ADDITIONAL_COSTS = {
@@ -57,11 +57,12 @@ const ProjectDetail = ({ setSidebarOpen }) => {
     const manHour = parseFloat(item.manHour) || 0;
     const intPrice = parseFloat(item.internationalPrice) || 0;
     const locPrice = parseFloat(item.localPrice) || 0;
-    const priceAfterDiscUSD = intPrice > 0 ? intPrice * factor * ((100 - diskon) / 100) : 0;
+    const discRate = (100 - diskon) / 100;
+    const priceAfterDiscUSD = intPrice > 0 ? (intPrice * discRate) / factor : 0;
     const priceBecomeIDR = priceAfterDiscUSD > 0 ? priceAfterDiscUSD * KURS_USD : 0;
-    const priceAfterDiscIDR = locPrice > 0 ? locPrice * factor * ((100 - diskon) / 100) : 0;
-    const basePriceIDR = priceBecomeIDR > 0 ? priceBecomeIDR : priceAfterDiscIDR;
-    const priceAfterManHour = basePriceIDR + manHour;
+    const sumPriceIDR = locPrice + (intPrice > 0 ? intPrice * KURS_USD : 0);
+    const priceAfterDiscIDR = sumPriceIDR > 0 ? (sumPriceIDR * discRate) / factor : 0;
+    const priceAfterManHour = priceAfterDiscIDR + manHour / factor;
     const totalPrice = priceAfterManHour * qty;
     return { priceAfterDiscUSD, priceBecomeIDR, priceAfterDiscIDR, priceAfterManHour, totalPrice };
   };
@@ -352,4 +353,3 @@ const ProjectDetail = ({ setSidebarOpen }) => {
 };
 
 export default ProjectDetail;
-

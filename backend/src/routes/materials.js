@@ -23,6 +23,8 @@ const materialSchema = z.object({
 });
 
 function toDbMaterial(input) {
+  const localPrice = input.localPrice ?? 0;
+  const manHour = Math.round(localPrice * 0.02);
   return {
     legacy_id: input.legacyId ?? null,
     item: input.item,
@@ -34,9 +36,9 @@ function toDbMaterial(input) {
     detail: input.detail ?? null,
     unit: input.unit ?? 'UNIT',
     international_price: input.internationalPrice ?? 0,
-    local_price: input.localPrice ?? 0,
+    local_price: localPrice,
     currency: input.currency ?? 'IDR',
-    man_hour: input.manHour ?? 0,
+    man_hour: manHour,
     vendor: input.vendor ?? null
   };
 }
@@ -61,6 +63,13 @@ function fromDbMaterial(row) {
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
+}
+
+function chunkArray(items, chunkSize) {
+  if (chunkSize <= 0) return [items];
+  const chunks = [];
+  for (let i = 0; i < items.length; i += chunkSize) chunks.push(items.slice(i, i + chunkSize));
+  return chunks;
 }
 
 router.get(
@@ -93,6 +102,41 @@ router.get(
     if (error) return res.status(500).json({ error: error.message });
 
     res.json({ data: (data ?? []).map(fromDbMaterial), count: count ?? 0, limit, offset });
+  })
+);
+
+router.post(
+  '/bulk',
+  asyncHandler(async (req, res) => {
+    const bulkSchema = z.object({
+      items: z.array(materialSchema).min(1),
+      dryRun: z.boolean().optional().default(false)
+    });
+
+    const input = bulkSchema.parse(req.body);
+
+    if (input.dryRun) {
+      return res.json({
+        data: input.items,
+        count: input.items.length
+      });
+    }
+
+    const dbRows = input.items.map(toDbMaterial);
+    const chunks = chunkArray(dbRows, 200);
+
+    const results = [];
+    for (const chunk of chunks) {
+      const { data, error } = await supabase
+        .from('materials')
+        .upsert(chunk, { onConflict: 'legacy_id' })
+        .select('*');
+
+      if (error) return res.status(400).json({ error: error.message });
+      results.push(...(data ?? []));
+    }
+
+    return res.status(201).json({ data: results.map(fromDbMaterial), count: results.length });
   })
 );
 
@@ -142,4 +186,3 @@ router.delete(
 );
 
 export default router;
-

@@ -82,7 +82,10 @@ const MobileMatCard = ({ mat, calc, formatRupiah, formatUSD, level }) => {
               <div className="flex justify-between"><span className="text-slate-500">Disc(USD):</span><span>{calc.priceAfterDiscUSD > 0 ? formatUSD(calc.priceAfterDiscUSD) : '-'}</span></div>
               <div className="flex justify-between"><span className="text-slate-500">To IDR:</span><span>{calc.priceBecomeIDR > 0 ? formatRupiah(calc.priceBecomeIDR) : '-'}</span></div>
               <div className="flex justify-between"><span className="text-slate-500">Disc(IDR):</span><span>{calc.priceAfterDiscIDR > 0 ? formatRupiah(calc.priceAfterDiscIDR) : '-'}</span></div>
-              <div className="flex justify-between"><span className="text-slate-500">+ManHr:</span><span>{formatRupiah(calc.priceAfterManHour)}</span></div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">+ManHr:</span>
+                <span>{formatRupiah((parseFloat(mat.manHour) || 0) / (parseFloat(mat.factor) || 1))}</span>
+              </div>
             </div>
           )}
         </div>
@@ -207,7 +210,11 @@ const ProductMaterialTable = ({ materials, calculateRow, formatRupiah, formatUSD
                   {showCol.discUSD && <td className="p-2 border-r text-right font-mono bg-slate-50 dark:bg-slate-800 whitespace-nowrap">{calc.priceAfterDiscUSD > 0 ? formatUSD(calc.priceAfterDiscUSD) : '-'}</td>}
                   {showCol.toIDR && <td className="p-2 border-r text-right font-mono bg-slate-50 dark:bg-slate-800 whitespace-nowrap">{calc.priceBecomeIDR > 0 ? formatRupiah(calc.priceBecomeIDR) : '-'}</td>}
                   {showCol.discIDR && <td className="p-2 border-r text-right font-mono bg-slate-50 dark:bg-slate-800 whitespace-nowrap">{calc.priceAfterDiscIDR > 0 ? formatRupiah(calc.priceAfterDiscIDR) : '-'}</td>}
-                  {showCol.plusManHr && <td className="p-2 border-r text-right font-mono bg-slate-50 dark:bg-slate-800 whitespace-nowrap">{formatRupiah(calc.priceAfterManHour)}</td>}
+                  {showCol.plusManHr && (
+                    <td className="p-2 border-r text-right font-mono bg-slate-50 dark:bg-slate-800 whitespace-nowrap">
+                      {formatRupiah((parseFloat(mat.manHour) || 0) / (parseFloat(mat.factor) || 1))}
+                    </td>
+                  )}
                   
                   <td className="p-2 text-right bg-blue-50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 font-bold font-mono whitespace-nowrap">{formatRupiah(calc.totalPrice)}</td>
                 </tr>

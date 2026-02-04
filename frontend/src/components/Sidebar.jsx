@@ -5,7 +5,7 @@ import {
   LogOut, Moon, Sun, ChevronRight, X, ChevronLeft
 } from 'lucide-react';
 import gaeLogoUrl from '../assets/Logo/LOGO GAE wawan.jpg.png';
-import { useTheme } from '../context/ThemeContext';
+import { useTheme } from '../context/useTheme';
 
 const Sidebar = ({ sidebarOpen, setSidebarOpen, collapsed, setCollapsed }) => {
   const { theme, toggleTheme } = useTheme();

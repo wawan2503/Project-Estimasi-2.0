@@ -25,3 +25,6 @@ dist-ssr
 *.sln
 *.sw?
 nohup.out
+
+# Local stray assets
+frontend/public/logogem.png

@@ -42,7 +42,7 @@ const MaterialRow = React.memo(({ m, onEdit, onDelete }) => (
     <td className="p-2 border-r text-right font-mono">{m.internationalPrice > 0 ? formatUSD(m.internationalPrice) : '-'}</td>
     <td className="p-2 border-r text-right font-mono">{m.localPrice > 0 ? formatRupiah(m.localPrice) : '-'}</td>
     <td className="p-2 border-r text-center">{m.currency || 'IDR'}</td>
-    <td className="p-2 border-r text-center">{m.manHour || 0}</td>
+    <td className="p-2 border-r text-center">{m.manHour ?? Math.round((m.localPrice || 0) * 0.02)}</td>
     <td className="p-2 text-center">
       <div className="flex justify-center gap-1">
         <button onClick={() => onEdit(m)} className="p-1 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50"><Edit2 size={14}/></button>
@@ -52,7 +52,7 @@ const MaterialRow = React.memo(({ m, onEdit, onDelete }) => (
   </tr>
 ));
 
-const emptyRow = { item: '', brand: '', detail: '', unit: 'UNIT', series: '', pole: '', ka: '', ampere: '', factor: 1, diskon: 0, internationalPrice: 0, localPrice: 0, currency: 'IDR', manHour: 0, vendor: '' };
+const emptyRow = { item: '', brand: '', detail: '', unit: 'UNIT', series: '', pole: '', ka: '', ampere: '', factor: 1, diskon: 0, internationalPrice: 0, localPrice: 0, currency: 'IDR', vendor: '' };
 
 const TableViewMaterial = ({ materials, onEdit, onDelete, onAdd }) => {
   const [filters, setFilters] = useState({ item: '', brand: '', detail: '', series: '', pole: '', ka: '', ampere: '' });
@@ -73,7 +73,15 @@ const TableViewMaterial = ({ materials, onEdit, onDelete, onAdd }) => {
 
   const handleSaveNewRow = useCallback(() => {
     if (!newRow.item || !newRow.brand) return alert('Item dan Brand wajib diisi!');
-    onAdd({ ...newRow, id: `c${Date.now()}`, internationalPrice: parseFloat(newRow.internationalPrice) || 0, localPrice: parseFloat(newRow.localPrice) || 0, manHour: parseFloat(newRow.manHour) || 0 });
+    const localPrice = parseFloat(newRow.localPrice) || 0;
+    const manHour = Math.round(localPrice * 0.02);
+    onAdd({
+      ...newRow,
+      id: `c${Date.now()}`,
+      internationalPrice: parseFloat(newRow.internationalPrice) || 0,
+      localPrice,
+      manHour
+    });
     setNewRow(null);
   }, [newRow, onAdd]);
 
@@ -130,7 +138,7 @@ const TableViewMaterial = ({ materials, onEdit, onDelete, onAdd }) => {
                 <td className="p-1 border-r"><input type="number" placeholder="0" value={newRow.internationalPrice} onChange={(e) => handleNewRowChange('internationalPrice', e.target.value)} className="w-20 px-1 py-1 text-xs border rounded text-right" /></td>
                 <td className="p-1 border-r"><input type="number" placeholder="0" value={newRow.localPrice} onChange={(e) => handleNewRowChange('localPrice', e.target.value)} className="w-24 px-1 py-1 text-xs border rounded text-right" /></td>
                 <td className="p-1 border-r"><select value={newRow.currency} onChange={(e) => handleNewRowChange('currency', e.target.value)} className="w-14 px-1 py-1 text-xs border rounded"><option>IDR</option><option>USD</option></select></td>
-                <td className="p-1 border-r"><input type="number" value={newRow.manHour} onChange={(e) => handleNewRowChange('manHour', e.target.value)} className="w-16 px-1 py-1 text-xs border rounded text-center" /></td>
+                <td className="p-1 border-r text-center text-xs font-mono">{Math.round((parseFloat(newRow.localPrice) || 0) * 0.02)}</td>
                 <td className="p-1 text-center">
                   <div className="flex justify-center gap-1">
                     <button onClick={handleSaveNewRow} className="p-1 rounded text-green-600 hover:bg-green-50"><Save size={14}/></button>
